@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check CRM_Konditsionery_v6.jsx)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npx vite:*)",
+      "Bash(ipconfig getifaddr:*)"
+    ]
+  }
+}

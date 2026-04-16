@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hourly Schedule Mockup</title>
+    <style>
+      :root {
+        --bg: #0f1122;
+        --panel: #181b33;
+        --panel-2: #1d2140;
+        --line: rgba(138, 162, 222, 0.14);
+        --line-soft: rgba(138, 162, 222, 0.08);
+        --text: #dbe4ff;
+        --muted: #8d9ac2;
+        --accent: #64ffda;
+        --danger: #ff6b77;
+        --busy: #ffcf56;
+        --card-green: #d7efcd;
+        --card-pink: #ffd7df;
+        --card-violet: #f2d4ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top left, rgba(83, 124, 255, 0.16), transparent 30%),
+          linear-gradient(180deg, #1c2144 0%, var(--bg) 30%);
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .frame {
+        width: 1360px;
+        margin: 28px auto;
+        border-radius: 22px;
+        border: 1px solid rgba(130, 154, 222, 0.16);
+        overflow: hidden;
+        background: linear-gradient(180deg, rgba(28, 33, 68, 0.98), rgba(15, 17, 34, 0.98));
+        box-shadow: 0 26px 80px rgba(0, 0, 0, 0.38);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 22px 28px 16px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 34px;
+        font-weight: 800;
+        color: var(--accent);
+        letter-spacing: 0.02em;
+      }
+
+      .brand .snow {
+        font-size: 30px;
+      }
+
+      .chips {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .chip {
+        padding: 10px 18px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 15px;
+        color: var(--text);
+      }
+
+      .hero-note {
+        padding: 0 28px 18px;
+        font-size: 18px;
+        color: #b9c5eb;
+      }
+
+      .legend {
+        display: flex;
+        gap: 12px;
+        padding: 0 28px 18px;
+      }
+
+      .legend .item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #cad4f6;
+        font-size: 14px;
+      }
+
+      .legend .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+      }
+
+      .grid-wrap {
+        padding: 0 20px 22px;
+      }
+
+      .schedule {
+        display: grid;
+        grid-template-columns: 110px 180px repeat(12, 1fr);
+        border-top: 1px solid var(--line);
+        border-left: 1px solid var(--line);
+        background: #101325;
+      }
+
+      .head {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: #12162c;
+        padding: 14px 10px;
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        color: #6efbe5;
+        font-size: 16px;
+        font-weight: 800;
+        text-align: center;
+        letter-spacing: 0.06em;
+      }
+
+      .head.left {
+        color: #8392bf;
+      }
+
+      .date-cell,
+      .master-cell,
+      .slot {
+        min-height: 88px;
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .date-cell {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 2px;
+        background: rgba(255, 255, 255, 0.01);
+      }
+
+      .date-cell .day {
+        font-size: 50px;
+        line-height: 1;
+        font-weight: 800;
+        color: white;
+      }
+
+      .date-cell .weekday {
+        font-size: 20px;
+        color: #95a7d6;
+        font-weight: 700;
+      }
+
+      .master-cell {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 16px;
+      }
+
+      .avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        color: #21314a;
+      }
+
+      .avatar.blue { background: #71c4ff; }
+      .avatar.green { background: #bfe279; }
+      .avatar.yellow { background: #ffc75c; }
+
+      .master-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .master-name {
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .master-sub {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .slot {
+        position: relative;
+        background: #101325;
+      }
+
+      .slot::after {
+        content: "+";
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: rgba(168, 183, 227, 0.18);
+        font-size: 26px;
+        font-weight: 500;
+      }
+
+      .slot.busy::after {
+        content: "занят";
+        color: var(--busy);
+        font-size: 14px;
+        font-weight: 800;
+        border: 2px dashed rgba(255, 207, 86, 0.44);
+        inset: 10px;
+        border-radius: 14px;
+      }
+
+      .slot.off {
+        background:
+          repeating-linear-gradient(
+            -45deg,
+            rgba(255, 107, 119, 0.18) 0,
+            rgba(255, 107, 119, 0.18) 16px,
+            rgba(255, 107, 119, 0.03) 16px,
+            rgba(255, 107, 119, 0.03) 32px
+          );
+      }
+
+      .slot.off::after {
+        content: "выходн.";
+        color: #d9afba;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .order {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        border-radius: 14px;
+        padding: 10px 12px;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14);
+        overflow: hidden;
+      }
+
+      .order h4 {
+        margin: 0 0 6px;
+        font-size: 15px;
+        line-height: 1.1;
+        color: #243247;
+      }
+
+      .order p {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.35;
+        color: #4d5a74;
+        font-weight: 600;
+      }
+
+      .order .badge {
+        position: absolute;
+        right: 10px;
+        bottom: 9px;
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(36, 50, 71, 0.14);
+        color: #32425d;
+        font-weight: 800;
+      }
+
+      .order.green { background: var(--card-green); }
+      .order.pink { background: var(--card-pink); }
+      .order.violet { background: var(--card-violet); }
+
+      .footer {
+        padding: 0 28px 24px;
+        color: #93a4d2;
+        font-size: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="header">
+        <div class="brand"><span class="snow">❄</span><span>CRM SPLIT SERVICE</span></div>
+        <div class="chips">
+          <div class="chip">Владелец</div>
+          <div class="chip">Апрель 2026</div>
+          <div class="chip">Часовая сетка</div>
+        </div>
+      </div>
+      <div class="hero-note">Вариант таблицы с шагом <strong>1 час</strong>, где заявка на 2 часа выглядит как <strong>одна объединённая карточка</strong>.</div>
+      <div class="legend">
+        <div class="item"><span class="dot" style="background:#64ffda"></span> свободный слот</div>
+        <div class="item"><span class="dot" style="background:#ffcf56"></span> мастер пометил «занят»</div>
+        <div class="item"><span class="dot" style="background:#ff6b77"></span> выходной</div>
+        <div class="item"><span class="dot" style="background:#d7efcd"></span> 2-часовая заявка</div>
+      </div>
+
+      <div class="grid-wrap">
+        <div class="schedule">
+          <div class="head left">ДАТА</div>
+          <div class="head left">МАСТЕР</div>
+          <div class="head">08:00</div>
+          <div class="head">09:00</div>
+          <div class="head">10:00</div>
+          <div class="head">11:00</div>
+          <div class="head">12:00</div>
+          <div class="head">13:00</div>
+          <div class="head">14:00</div>
+          <div class="head">15:00</div>
+          <div class="head">16:00</div>
+          <div class="head">17:00</div>
+          <div class="head">18:00</div>
+          <div class="head">19:00</div>
+
+          <div class="date-cell" style="grid-row: span 3;">
+            <div class="day">9</div>
+            <div class="weekday">Чт</div>
+          </div>
+          <div class="master-cell">
+            <div class="avatar blue">А</div>
+            <div class="master-info">
+              <div class="master-name">Алексей Друж.</div>
+              <div class="master-sub">Ростов-на-Дону</div>
+            </div>
+          </div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot">
+            <div class="order green" style="right: calc(-100% - 9px);">
+              <h4>Чистка сплит-системы</h4>
+              <p>Мария · Текучёва, 21</p>
+              <p>10:00–12:00 · 2 часа</p>
+              <div class="badge">2000 ₽</div>
+            </div>
+          </div>
+          <div class="slot"></div>
+          <div class="slot busy"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot off"></div>
+          <div class="slot off"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+
+          <div class="master-cell">
+            <div class="avatar green">Д</div>
+            <div class="master-info">
+              <div class="master-name">Дмитрий</div>
+              <div class="master-sub">Ростов-на-Дону</div>
+            </div>
+          </div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot">
+            <div class="order pink" style="right: calc(-200% - 18px);">
+              <h4>Монтаж трассы</h4>
+              <p>Евгения · Центр</p>
+              <p>12:00–15:00 · 3 часа</p>
+              <div class="badge">3500 ₽</div>
+            </div>
+          </div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot busy"></div>
+
+          <div class="master-cell">
+            <div class="avatar yellow">Г</div>
+            <div class="master-info">
+              <div class="master-name">Гриша</div>
+              <div class="master-sub">Ростов-на-Дону</div>
+            </div>
+          </div>
+          <div class="slot"></div>
+          <div class="slot">
+            <div class="order violet" style="right: calc(-100% - 9px);">
+              <h4>Диагностика</h4>
+              <p>Ирина · Промышленный</p>
+              <p>09:00–11:00 · 2 часа</p>
+              <div class="badge">1500 ₽</div>
+            </div>
+          </div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot busy"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+          <div class="slot"></div>
+        </div>
+      </div>
+
+      <div class="footer">Смысл варианта: запись ставится в точное стартовое время, а длительность просто растягивает одну карточку на 2-3 соседних часа.</div>
+    </div>
+  </body>
+</html>
