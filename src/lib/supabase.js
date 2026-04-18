@@ -1,6 +1,7 @@
 const SESSION_KEY = "crm-v2-supabase-session";
 const AUTH_REFRESH_BUFFER_SECONDS = 30;
 const NETWORK_RETRY_DELAY_MS = 350;
+const FETCH_TIMEOUT_MS = 8000;
 
 export const getSupabaseConfig = () => ({
   url: import.meta.env?.VITE_SUPABASE_URL || "",
@@ -69,16 +70,38 @@ const getAuthErrorMessage = (data, fallback) => (
 
 const isRetriableNetworkError = (error) => {
   const message = `${error?.message || error || ""}`.toLowerCase();
-  return message.includes("load failed") || message.includes("failed to fetch") || message.includes("networkerror");
+  return message.includes("load failed")
+    || message.includes("failed to fetch")
+    || message.includes("networkerror")
+    || message.includes("timed out")
+    || message.includes("timeout");
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchWithTimeout = async (input, init = {}) => {
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Supabase request timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timerId);
+  }
+};
 
 const fetchWithRetry = async (input, init, attempts = 2) => {
   let lastError = null;
   for (let index = 0; index < attempts; index += 1) {
     try {
-      return await fetch(input, init);
+      return await fetchWithTimeout(input, init);
     } catch (error) {
       lastError = error;
       if (!isRetriableNetworkError(error) || index === attempts - 1) {
