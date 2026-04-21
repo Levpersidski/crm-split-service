@@ -16,6 +16,7 @@ const bok = (c,m,d,t) => `busy|${c}|${m}|${d}|${t}`;
 const lok = (c,m,d,t) => `lock|${c}|${m}|${d}|${t}`;
 const DEFAULT_ORDER_DURATION_SLOTS = 2;
 const SLOT_LOCK_TTL_MS = 5 * 60 * 1000;
+const WORKDAY_SLOT_COUNT = 13;
 const DEFAULT_STATUSES = [
   { name: "Новый", shortLabel: "НОВЫЙ", tone: "amber", sortOrder: 0 },
   { name: "Прозвонен", shortLabel: "ПРОЗВ.", tone: "sky", sortOrder: 1 },
@@ -122,6 +123,7 @@ const mergeSnapshot = (defaults, stored) => {
     contacts: stored.state?.contacts || defaults.contacts,
     contactStatuses: stored.state?.contactStatuses || defaults.contactStatuses,
     contactReasons: stored.state?.contactReasons || defaults.contactReasons,
+    deletedOrders: stored.state?.deletedOrders || defaults.deletedOrders || {},
   };
 };
 
@@ -129,6 +131,45 @@ const normalizeCities = (rows) => rows.reduce((acc, row) => {
   acc[row.name] = { id: row.id, color: row.color, lat: row.lat, lng: row.lng };
   return acc;
 }, {});
+
+const createDefaultWorkSchedule = () => Object.fromEntries(
+  Array.from({ length: 7 }, (_, dayIdx) => [String(dayIdx), Array(WORKDAY_SLOT_COUNT).fill(true)]),
+);
+
+const normalizeWorkSchedule = (schedule) => {
+  const base = createDefaultWorkSchedule();
+  if (!schedule || typeof schedule !== "object") return base;
+  return Object.fromEntries(
+    Array.from({ length: 7 }, (_, dayIdx) => {
+      const raw = schedule[dayIdx] ?? schedule[String(dayIdx)];
+      if (!Array.isArray(raw)) return [String(dayIdx), base[String(dayIdx)].slice()];
+      return [String(dayIdx), base[String(dayIdx)].map((value, slotIdx) => raw[slotIdx] !== false)];
+    }),
+  );
+};
+
+const isScheduleActiveFromDate = (employee, dateStr) => {
+  const effectiveFrom = String(employee?.workScheduleEffectiveFrom || "").trim();
+  if (!dateStr || !effectiveFrom) return true;
+  return dateStr >= effectiveFrom;
+};
+
+const mergeEmployeeSchedules = (employees = [], storedEmployees = []) => {
+  const scheduleMap = new Map(
+    (storedEmployees || []).map((employee) => [
+      employee.id || `${employee.type || ""}|${employee.city || ""}|${employee.name || ""}`,
+      {
+        workSchedule: employee.workSchedule,
+        workScheduleEffectiveFrom: employee.workScheduleEffectiveFrom || "",
+      },
+    ]),
+  );
+  return employees.map((employee) => ({
+    ...employee,
+    workSchedule: normalizeWorkSchedule((scheduleMap.get(employee.id || `${employee.type || ""}|${employee.city || ""}|${employee.name || ""}`) || {}).workSchedule || employee.workSchedule),
+    workScheduleEffectiveFrom: (scheduleMap.get(employee.id || `${employee.type || ""}|${employee.city || ""}|${employee.name || ""}`) || {}).workScheduleEffectiveFrom || employee.workScheduleEffectiveFrom || "",
+  }));
+};
 
 const normalizeEmployees = (rows, privateMap, scopesMap = {}) => rows.map((row) => ({
   id: row.id,
@@ -147,6 +188,8 @@ const normalizeEmployees = (rows, privateMap, scopesMap = {}) => rows.map((row) 
   lastSeen: row.last_seen || null,
   serviceScopes: scopesMap[row.id] || [],
   skillSubcategoryIds: (scopesMap[row.id] || []).map((scope) => scope.subcategoryId),
+  workSchedule: createDefaultWorkSchedule(),
+  workScheduleEffectiveFrom: "",
 }));
 
 const normalizeOrders = (rows, options = {}) => rows.reduce((acc, row) => {
@@ -612,6 +655,7 @@ export const loadCrmState = async (defaults, session) => {
       ...defaults,
       activeCity: preferredActiveCity,
       month: Number.isInteger(storedState.month) ? storedState.month : defaults.month,
+      year: Number.isInteger(storedState.year) ? storedState.year : defaults.year,
       showSummary: Boolean(storedState.showSummary),
       showServiceCatalog: Boolean(storedState.showServiceCatalog),
       showDataView: Boolean(storedState.showDataView),
@@ -621,7 +665,7 @@ export const loadCrmState = async (defaults, session) => {
         ? storedState.visibleStatusNames
         : (statuses || DEFAULT_STATUSES).map((status) => status.name),
       cities: normalizedCities,
-      employees: normalizeEmployees(employeesRaw || [], privateMap, employeeScopesMap),
+      employees: mergeEmployeeSchedules(normalizeEmployees(employeesRaw || [], privateMap, employeeScopesMap), storedState.employees || []),
       orders,
       orderHistory: normalizeHistory(historyRaw || [], orders),
       dayOffs: normalizeDayOffs(dayOffsRaw || []),
@@ -642,6 +686,7 @@ export const loadCrmState = async (defaults, session) => {
       contacts,
       contactStatuses,
       contactReasons,
+      deletedOrders: storedState.deletedOrders || defaults.deletedOrders || {},
       currentUser: currentUserRow ? {
         id: currentUserRow.id,
         name: currentUserRow.name,
@@ -695,7 +740,19 @@ const ensureHourlyPlacement = ({ formData, existingOrder, snapshot }) => {
   if (snapshot.dayOffs?.[dayOffKey]) {
     throw new Error("У мастера в этот день выходной.");
   }
+  const technician = findEmployee(snapshot.employees || [], { name: formData.master, city: formData.city, type: "technician" });
+  const schedule = normalizeWorkSchedule(technician?.workSchedule);
+  const dayIdx = formData.dateStr ? new Date(`${formData.dateStr}T00:00:00`).getDay() : null;
+  const scheduleActive = isScheduleActiveFromDate(technician, formData.dateStr);
+  const existingAppliesToSlot = (idx) => existingOrder
+    && existingOrder.city === formData.city
+    && existingOrder.master === formData.master
+    && existingOrder.dateStr === formData.dateStr
+    && rangesOverlap(idx, 1, Number(existingOrder.timeIdx || 0), getDurationSlots(existingOrder));
   for (let idx = start; idx < start + duration; idx += 1) {
+    if (scheduleActive && dayIdx != null && schedule[String(dayIdx)]?.[idx] === false && !existingAppliesToSlot(idx)) {
+      throw new Error("В выбранном диапазоне у мастера нерабочее время.");
+    }
     if (snapshot.busySlots?.[bok(formData.city, formData.master, formData.dateStr, idx)]) {
       throw new Error("В выбранном диапазоне есть занятые часы мастера.");
     }

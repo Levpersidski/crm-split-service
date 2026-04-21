@@ -33,6 +33,7 @@ import {
   deleteServiceNode,
 } from "./src/api/crmRepository.js";
 import { getStoredSession, isSupabaseConfigured, signInWithPassword, signOut, storeSession } from "./src/lib/supabase.js";
+import CustomSelect from "./src/shared/ui/CustomSelect.jsx";
 
 const INIT_CITIES = {
   "Краснодар": { color: "#2E7D32", lat: 45.0355, lng: 38.9753 },
@@ -63,6 +64,15 @@ const INIT_EMPLOYEES = [
 ];
 const WORKDAY_START_HOUR = 8;
 const TIMES = Array.from({ length: 13 }, (_, idx) => `${String(WORKDAY_START_HOUR + idx).padStart(2,"0")}:00`);
+const WEEKDAY_BUTTONS = [
+  { value: 1, label: "Пн" },
+  { value: 2, label: "Вт" },
+  { value: 3, label: "Ср" },
+  { value: 4, label: "Чт" },
+  { value: 5, label: "Пт" },
+  { value: 6, label: "Сб" },
+  { value: 0, label: "Вс" },
+];
 const DEFAULT_ORDER_DURATION_SLOTS = 2;
 const NEW_ORDER_DURATION_SLOTS = 1;
 const INIT_STATUSES = [
@@ -153,12 +163,12 @@ const STATUS_TONES = {
   },
 };
 const CONTACT_STATUS_TONES = {
-  blue: { bg:"rgba(93,168,255,0.18)", border:"rgba(93,168,255,0.5)", text:"#b9d8ff", accent:"#5DA8FF" },
-  yellow: { bg:"rgba(255,209,102,0.18)", border:"rgba(255,209,102,0.5)", text:"#ffe19b", accent:"#FFD166" },
-  orange: { bg:"rgba(255,160,102,0.18)", border:"rgba(255,160,102,0.45)", text:"#ffc49c", accent:"#FF9E66" },
-  red: { bg:"rgba(239,83,80,0.16)", border:"rgba(239,83,80,0.42)", text:"#ffb4b2", accent:"#EF5350" },
-  green: { bg:"rgba(129,199,132,0.18)", border:"rgba(129,199,132,0.45)", text:"#b9efbc", accent:"#81C784" },
-  gray: { bg:"rgba(148,163,184,0.16)", border:"rgba(148,163,184,0.4)", text:"#d5deea", accent:"#94A3B8" },
+  blue: { bg:"rgba(255,255,255,0.92)", border:"rgba(219,226,240,0.95)", text:"#20263a", accent:"#ffffff", pillBg:"#F4F7FB", pillBorder:"#D6DFED", pillText:"#20263A" },
+  yellow: { bg:"rgba(255,120,120,0.16)", border:"rgba(255,120,120,0.4)", text:"#ffb3b3", accent:"#FF7A7A", pillBg:"#F4A4AE", pillBorder:"#D96B79", pillText:"#4F1F28" },
+  orange: { bg:"rgba(255,179,102,0.18)", border:"rgba(255,179,102,0.45)", text:"#ffd2a6", accent:"#FFB347", pillBg:"#F2D28B", pillBorder:"#D7B25D", pillText:"#4A3410" },
+  red: { bg:"rgba(124,199,242,0.18)", border:"rgba(124,199,242,0.42)", text:"#c8e6ff", accent:"#7CC7F2", pillBg:"#A9D6FF", pillBorder:"#69AEEF", pillText:"#1E3550" },
+  green: { bg:"rgba(129,199,132,0.18)", border:"rgba(129,199,132,0.45)", text:"#b9efbc", accent:"#81C784", pillBg:"#8FD3A4", pillBorder:"#54AF72", pillText:"#173824" },
+  gray: { bg:"rgba(148,163,184,0.16)", border:"rgba(148,163,184,0.4)", text:"#d5deea", accent:"#94A3B8", pillBg:"#94A3B8", pillBorder:"#64748B", pillText:"#FFFFFF" },
 };
 const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 const INIT_SOURCES = ["Авито","Листовка","Яндекс","Рекомендация","2ГИС","Сайт"];
@@ -171,6 +181,7 @@ const lok = (c,m,d,t) => `lock|${c}|${m}|${d}|${t}`;
 const dstr = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const fd = (d) => { const n=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"]; return `${d.getDate().toString().padStart(2,"0")}.${(d.getMonth()+1).toString().padStart(2,"0")} ${n[d.getDay()]}`; };
 const daysIn = (y,m) => { const r=[]; for(let i=1;i<=new Date(y,m+1,0).getDate();i++) r.push(new Date(y,m,i)); return r; };
+const formatMonthYearLabel = (month, year) => `${MONTHS[month] || ""} ${String(year).slice(-2)}`;
 const fmtPh = (raw) => { const d=raw.replace(/\D/g,"").slice(0,10); if(!d)return""; let f="("+d.slice(0,3); if(d.length>3)f+=") "+d.slice(3,6); if(d.length>6)f+="-"+d.slice(6,8); if(d.length>8)f+="-"+d.slice(8,10); return f; };
 const fmtTs = (v) => new Date(v).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const empKey = (e) => `${e.type}|${e.city || "all"}|${e.name}`;
@@ -208,6 +219,19 @@ const GLOW = "0 14px 36px rgba(6,10,28,0.35)";
 const ONLINE_WINDOW_MS = 10 * 60 * 1000;
 const SLOT_LOCK_TTL_MS = 5 * 60 * 1000;
 const STATUS_TONE_KEYS = Object.keys(STATUS_TONES);
+
+const ConfirmDialog = ({ title, onConfirm, onCancel, confirmLabel = "Да", cancelLabel = "Нет" }) => (
+  <>
+    <div onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.46)",zIndex:1500}} />
+    <div style={{position:"fixed",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:"min(92vw, 360px)",borderRadius:18,background:"linear-gradient(180deg,#202746,#171c34)",border:"1px solid rgba(255,255,255,0.1)",boxShadow:"0 24px 60px rgba(0,0,0,0.46)",padding:"20px 18px",zIndex:1501}}>
+      <div style={{fontSize:18,fontWeight:800,color:"#f4f7ff",textAlign:"center"}}>{title}</div>
+      <div style={{display:"flex",justifyContent:"center",gap:10,marginTop:18}}>
+        <button type="button" onClick={onConfirm} className="tb" style={{minWidth:110,height:40,padding:"0 16px",borderRadius:12,border:"1px solid rgba(100,255,218,0.28)",background:"linear-gradient(135deg,#65ffdd,#18c5be)",color:"#0a0a23",fontSize:13,fontWeight:800,fontFamily:"inherit"}}>{confirmLabel}</button>
+        <button type="button" onClick={onCancel} className="tb" style={{minWidth:110,height:40,padding:"0 16px",borderRadius:12,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.04)",color:"#dbe4ff",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>{cancelLabel}</button>
+      </div>
+    </div>
+  </>
+);
 const getStatusTone = (statusItem) => STATUS_TONES[statusItem?.tone] || STATUS_TONES.teal;
 const makeStatusMap = (statuses = INIT_STATUSES) => new Map((statuses || []).map((status, index) => [status.name, { ...status, sortOrder: Number(status.sortOrder ?? index) }]));
 const defaultStatusName = (statuses = INIT_STATUSES) => statuses?.[0]?.name || "Новый";
@@ -239,7 +263,13 @@ const toDateInputValue = (value) => {
 const contactStatusMeta = (status, statusMap) => {
   const statusItem = statusMap?.get(status) || { name: status, tone: "gray" };
   const tone = getContactStatusTone(statusItem);
-  return { ...tone, name: statusItem.name || status };
+  return { ...tone, pillBg: tone.pillBg || tone.bg, pillBorder: tone.pillBorder || tone.border, pillText: tone.pillText || tone.text, name: statusItem.name || status };
+};
+const formatOrderAddressLine = (address = "", apartment = "", floor = "") => {
+  const parts = [address];
+  if (String(apartment || "").trim()) parts.push(`кв. ${String(apartment).trim()}`);
+  if (String(floor || "").trim()) parts.push(`этаж ${String(floor).trim()}`);
+  return parts.filter(Boolean).join(", ");
 };
 const formatDateRu = (value) => {
   if (!value) return "—";
@@ -533,6 +563,39 @@ const formatScheduleEmployeeName = (name = "") => {
   if (last.length <= 6) return `${first} ${last}`;
   return `${first} ${last.slice(0, 6)}.`;
 };
+const createDefaultWorkSchedule = () => Object.fromEntries(
+  Array.from({ length: 7 }, (_, dayIdx) => [String(dayIdx), Array(TIMES.length).fill(true)]),
+);
+const normalizeWorkSchedule = (schedule) => {
+  const base = createDefaultWorkSchedule();
+  if (!schedule || typeof schedule !== "object") return base;
+  return Object.fromEntries(
+    Array.from({ length: 7 }, (_, dayIdx) => {
+      const raw = schedule[dayIdx] ?? schedule[String(dayIdx)];
+      if (!Array.isArray(raw)) return [String(dayIdx), base[String(dayIdx)].slice()];
+      return [String(dayIdx), TIMES.map((_, slotIdx) => raw[slotIdx] !== false)];
+    }),
+  );
+};
+const getDayIndexFromDateStr = (dateStr = "") => {
+  if (!dateStr) return null;
+  const parsed = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.getDay();
+};
+const isScheduleActiveFromDate = (employee, dateStr) => {
+  const effectiveFrom = String(employee?.workScheduleEffectiveFrom || "").trim();
+  if (!dateStr || !effectiveFrom) return true;
+  return dateStr >= effectiveFrom;
+};
+const isEmployeeWorkingAt = (employee, dateStr, slotIdx) => {
+  if (employee?.type !== "technician") return true;
+  if (!isScheduleActiveFromDate(employee, dateStr)) return true;
+  const dayIdx = getDayIndexFromDateStr(dateStr);
+  if (dayIdx == null) return true;
+  const schedule = normalizeWorkSchedule(employee?.workSchedule);
+  return Boolean(schedule[String(dayIdx)]?.[slotIdx] ?? true);
+};
 
 const timeAgoRu = (value) => {
   if (!value) return "только что";
@@ -759,13 +822,46 @@ const pinToPixelPercent = (pin, center, zoom) => {
   const py = (0.5 - latToMercY(pin.lat) / (2 * Math.PI)) * worldPx;
   return { x: ((px - cx) / 650 + 0.5) * 100, y: ((py - cy) / 450 + 0.5) * 100 };
 };
-const MultiPinMapModal = ({ pins = [], homePins = [], title = "Карта заказов", onClose, highlightPin = null, cityCenter = null }) => {
+const YMAPS_API_KEY = "f3a0fe3a-b07e-4840-a1da-06f18b2ddf13";
+let ymapsLoadPromise = null;
+const loadYmaps = () => {
+  if (typeof window === "undefined") return Promise.reject(new Error("no window"));
+  if (window.ymaps && window.ymaps.Map) return Promise.resolve(window.ymaps);
+  if (ymapsLoadPromise) return ymapsLoadPromise;
+  ymapsLoadPromise = new Promise((resolve, reject) => {
+    const finalize = () => {
+      if (!window.ymaps || !window.ymaps.ready) { reject(new Error("ymaps missing")); return; }
+      window.ymaps.ready(() => resolve(window.ymaps));
+    };
+    const existing = document.querySelector("script[data-ymaps-loader]");
+    if (existing) {
+      existing.addEventListener("load", finalize, { once: true });
+      existing.addEventListener("error", () => { ymapsLoadPromise = null; reject(new Error("load failed")); }, { once: true });
+      if (window.ymaps) finalize();
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = `https://api-maps.yandex.ru/2.1/?apikey=${YMAPS_API_KEY}&lang=ru_RU`;
+    s.async = true;
+    s.dataset.ymapsLoader = "1";
+    s.onload = finalize;
+    s.onerror = () => { ymapsLoadPromise = null; reject(new Error("load failed")); };
+    document.head.appendChild(s);
+  });
+  return ymapsLoadPromise;
+};
+
+const MultiPinMapModal = ({ pins = [], homePins = [], title = "Карта заказов", onClose, highlightPin = null, cityCenter = null, selectedPinId = null, slotRows = null, onSlotSelect = null }) => {
   const [resolvedPins, setResolvedPins] = useState([]);
   const [geocoding, setGeocoding] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState(null);
   const listRef = useRef(null);
-  const mapRef = useRef(null);
-  const dragRef = useRef({ dragging: false, startX: 0, startY: 0, moved: false });
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const placemarksRef = useRef([]);
+  const didInitialFitRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -789,169 +885,257 @@ const MultiPinMapModal = ({ pins = [], homePins = [], title = "Карта зак
     return () => { cancelled = true; };
   }, [pins]);
 
-  const orderPins = highlightPin ? [...resolvedPins, highlightPin] : resolvedPins;
-  const allPins = [...orderPins, ...homePins];
+  const orderPins = useMemo(() => (
+    highlightPin ? [...resolvedPins, highlightPin] : resolvedPins
+  ), [resolvedPins, highlightPin]);
+  const allPins = useMemo(() => [...orderPins, ...homePins], [orderPins, homePins]);
   const defaultCenter = cityCenter || { lat: 45.03, lon: 38.97 };
-  const { lat, lon, zoom: initZoom } = allPins.length ? fitBounds(allPins) : { ...defaultCenter, zoom: 12 };
-  const [center, setCenter] = useState({ lat, lon });
-  const [zoom, setZoom] = useState(initZoom);
+  const pinIndexById = useMemo(() => new Map(orderPins.map((pin, index) => [pin.id, index])), [orderPins]);
 
+  // Initialize ymaps once
   useEffect(() => {
-    if (!allPins.length) return;
-    const b = fitBounds(allPins);
-    setCenter({ lat: b.lat, lon: b.lon });
-    setZoom(b.zoom);
-  }, [resolvedPins.length, homePins.length]);
-
-  const ptParts = orderPins.map((p) => {
-    const color = p.pinColor || "rd";
-    const size = p.highlight ? "l" : "m";
-    return `${p.lon},${p.lat},pm2${color}${size}`;
-  });
-  const ptParam = ptParts.length ? `&pt=${ptParts.join("~")}` : "";
-  const mapUrl = `https://static-maps.yandex.ru/v1?ll=${center.lon},${center.lat}&z=${zoom}&size=650,450&l=map${ptParam}&lang=ru_RU&apikey=f3a0fe3a-b07e-4840-a1da-06f18b2ddf13`;
-
-  const pixelToLatLon = (dx, dy, rect) => {
-    const scale = Math.pow(2, zoom);
-    const metersPerPixel = 156543.03392 * Math.cos(center.lat * Math.PI / 180) / scale;
-    const mapW = 650 * metersPerPixel;
-    const mapH = 450 * metersPerPixel;
-    const fracX = dx / rect.width;
-    const fracY = dy / rect.height;
-    return {
-      dLon: fracX * mapW / (111320 * Math.cos(center.lat * Math.PI / 180)),
-      dLat: -fracY * mapH / 111320,
-    };
-  };
-
-  const handleMouseDown = (e) => {
-    if (e.button !== 0) return;
-    dragRef.current = { dragging: true, startX: e.clientX, startY: e.clientY, moved: false };
-    e.preventDefault();
-  };
-  const handleMouseMove = useCallback((e) => {
-    const d = dragRef.current;
-    if (!d.dragging) return;
-    const dx = e.clientX - d.startX;
-    const dy = e.clientY - d.startY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) d.moved = true;
-  }, []);
-  const handleMouseUp = useCallback((e) => {
-    const d = dragRef.current;
-    if (!d.dragging) return;
-    d.dragging = false;
-    if (!d.moved) return;
-    const rect = mapRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const dx = -(e.clientX - d.startX);
-    const dy = -(e.clientY - d.startY);
-    const { dLon, dLat } = pixelToLatLon(dx, dy, rect);
-    setCenter(prev => ({ lat: prev.lat + dLat, lon: prev.lon + dLon }));
-  }, [zoom, center.lat]);
-
-  useEffect(() => {
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-    return () => { document.removeEventListener("mousemove", handleMouseMove); document.removeEventListener("mouseup", handleMouseUp); };
-  }, [handleMouseMove, handleMouseUp]);
-
-  const handleWheel = useCallback((e) => {
-    e.preventDefault();
-    setZoom(z => Math.max(8, Math.min(18, z + (e.deltaY < 0 ? 1 : -1))));
-  }, []);
-
-  const handleMapClick = (e) => {
-    if (dragRef.current.moved) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = (e.clientX - rect.left) / rect.width;
-    const clickY = (e.clientY - rect.top) / rect.height;
-    const scale = Math.pow(2, zoom);
-    const mpp = 156543.03392 * Math.cos(center.lat * Math.PI / 180) / scale;
-    const dLon = (clickX - 0.5) * 650 * mpp / (111320 * Math.cos(center.lat * Math.PI / 180));
-    const dLat = -(clickY - 0.5) * 450 * mpp / 111320;
-    const click = { lat: center.lat + dLat, lon: center.lon + dLon };
-    if (allPins.length > 0) {
-      let bestIdx = -1, bestDist = Infinity;
-      allPins.forEach((p, i) => {
-        const d = Math.pow(p.lat - click.lat, 2) + Math.pow(p.lon - click.lon, 2);
-        if (d < bestDist) { bestDist = d; bestIdx = i; }
+    let cancelled = false;
+    loadYmaps().then((ymaps) => {
+      if (cancelled || !mapContainerRef.current) return;
+      const map = new ymaps.Map(mapContainerRef.current, {
+        center: [defaultCenter.lat, defaultCenter.lon],
+        zoom: 12,
+        controls: ["zoomControl"],
+      }, {
+        suppressMapOpenBlock: true,
+        yandexMapDisablePoiInteractivity: true,
       });
-      const thresholdDeg = 180 / Math.pow(2, zoom) * 0.15;
-      if (bestIdx >= 0 && Math.sqrt(bestDist) < thresholdDeg) {
-        setSelectedIdx(prev => prev === bestIdx ? null : bestIdx);
-        if (listRef.current) {
-          const el = listRef.current.children[bestIdx];
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
+      mapInstanceRef.current = map;
+      setMapReady(true);
+    }).catch((err) => {
+      if (!cancelled) setMapError(String(err?.message || err));
+    });
+    return () => {
+      cancelled = true;
+      if (mapInstanceRef.current) {
+        try { mapInstanceRef.current.destroy(); } catch {}
+        mapInstanceRef.current = null;
+      }
+      placemarksRef.current = [];
+      setMapReady(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fit bounds / focus once pins are resolved
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !mapReady || didInitialFitRef.current) return;
+    // Wait for the target pin to be resolved before choosing a focus
+    if (selectedPinId) {
+      const sel = orderPins.find(p => p.id === selectedPinId);
+      if (sel && sel.lat && sel.lon) {
+        didInitialFitRef.current = true;
+        map.setCenter([sel.lat, sel.lon], 16, { duration: 250 });
         return;
       }
+      if (geocoding) return; // wait a bit longer
     }
-    setSelectedIdx(null);
-  };
+    if (highlightPin && highlightPin.lat && highlightPin.lon) {
+      didInitialFitRef.current = true;
+      map.setCenter([highlightPin.lat, highlightPin.lon], 16, { duration: 250 });
+      return;
+    }
+    if (!allPins.length) return;
+    didInitialFitRef.current = true;
+    if (allPins.length === 1) {
+      map.setCenter([allPins[0].lat, allPins[0].lon], 15, { duration: 250 });
+    } else {
+      const minLat = Math.min(...allPins.map(p => p.lat));
+      const maxLat = Math.max(...allPins.map(p => p.lat));
+      const minLon = Math.min(...allPins.map(p => p.lon));
+      const maxLon = Math.max(...allPins.map(p => p.lon));
+      map.setBounds([[minLat, minLon], [maxLat, maxLon]], { checkZoomRange: true, zoomMargin: 80, duration: 250 });
+    }
+  }, [mapReady, allPins, orderPins, highlightPin, selectedPinId, geocoding]);
+
+  // Re-render placemarks when data or selection changes
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const ymaps = typeof window !== "undefined" ? window.ymaps : null;
+    if (!map || !ymaps || !mapReady) return;
+    placemarksRef.current.forEach(pm => { try { map.geoObjects.remove(pm); } catch {} });
+    placemarksRef.current = [];
+
+    const pinLayout = ymaps.templateLayoutFactory.createClass(
+      '<div class="crm-pin-wrap" style="position:relative;width:$[properties.boxW]px;height:$[properties.boxH]px;transform:translate(-50%,-100%);pointer-events:auto;overflow:visible;">' +
+        '{% if properties.isSel %}' +
+          '<div class="crm-pin-shadow" style="position:absolute;left:50%;bottom:4px;width:$[properties.width]px;height:14px;transform:translateX(-50%);border-radius:50%;background:radial-gradient(ellipse,rgba(0,0,0,0.75) 0%,rgba(0,0,0,0.35) 45%,transparent 75%);animation:crmPinShadow 1.3s ease-in-out infinite;pointer-events:none;"></div>' +
+          '<div class="crm-pin-halo" style="position:absolute;left:50%;bottom:-2px;width:$[properties.width]px;height:$[properties.width]px;transform:translate(-50%,50%);border-radius:50%;background:radial-gradient(circle,$[properties.color]aa 0%,$[properties.color]33 50%,transparent 72%);animation:crmPinHalo 1.3s ease-in-out infinite;pointer-events:none;"></div>' +
+        '{% endif %}' +
+        '<svg class="crm-pin-svg{% if properties.isSel %} crm-pin-bounce{% endif %}" width="$[properties.width]" height="$[properties.height]" viewBox="-2 -2 32 44" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:50%;top:0;transform:translateX(-50%);overflow:visible;filter:drop-shadow(0 3px 4px rgba(0,0,0,0.55));">' +
+          '<path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 26 14 26s14-15.5 14-26C28 6.27 21.73 0 14 0z" fill="$[properties.color]" stroke="#ffffff" stroke-width="2.5"/>' +
+          '<circle cx="14" cy="14" r="5" fill="#ffffff"/>' +
+        '</svg>' +
+      '</div>'
+    );
+    const homeLayout = ymaps.templateLayoutFactory.createClass(
+      '<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);pointer-events:auto;"><div style="font-size:$[properties.size]px;line-height:1;filter:drop-shadow(0 0 4px $[properties.color]);">🏠</div><div style="font-size:9px;color:#fff;font-weight:800;text-shadow:0 0 3px #000,0 0 6px #000;white-space:nowrap;margin-top:-2px;">$[properties.name]</div></div>'
+    );
+
+    orderPins.forEach((p, i) => {
+      const isSel = i === selectedIdx;
+      const baseColor = p.highlight ? "#ff5252" : (p.legendColor || "#64ffda");
+      const width = isSel ? 38 : 28;
+      const height = isSel ? 54 : 40;
+      const boxW = isSel ? Math.round(width * 2.2) : width + 6;
+      const boxH = isSel ? Math.round(height * 1.6) : height + 6;
+      const pm = new ymaps.Placemark([p.lat, p.lon], {
+        hintContent: p.label || "Заказ",
+        color: baseColor,
+        width,
+        height,
+        boxW,
+        boxH,
+        isSel,
+      }, {
+        iconLayout: pinLayout,
+        iconShape: { type: "Rectangle", coordinates: [[-boxW/2, -boxH], [boxW/2, 0]] },
+        zIndex: isSel ? 1000 : (p.highlight ? 500 : 100),
+        hasBalloon: false,
+      });
+      pm.events.add("click", (e) => {
+        e.stopPropagation();
+        setSelectedIdx(prev => prev === i ? null : i);
+      });
+      map.geoObjects.add(pm);
+      placemarksRef.current.push(pm);
+    });
+
+    homePins.forEach((hp, i) => {
+      const idx = orderPins.length + i;
+      const isSel = idx === selectedIdx;
+      const pm = new ymaps.Placemark([hp.lat, hp.lon], {
+        hintContent: hp.label,
+        color: hp.legendColor || "#64ffda",
+        size: isSel ? 28 : 22,
+        name: (hp.label || "").replace(/^🏠\s*/, ""),
+      }, {
+        iconLayout: homeLayout,
+        iconShape: { type: "Rectangle", coordinates: [[-16, -34], [16, 0]] },
+        zIndex: isSel ? 900 : 50,
+        hasBalloon: false,
+      });
+      pm.events.add("click", (e) => {
+        e.stopPropagation();
+        setSelectedIdx(prev => prev === idx ? null : idx);
+      });
+      map.geoObjects.add(pm);
+      placemarksRef.current.push(pm);
+    });
+  }, [mapReady, orderPins, homePins, selectedIdx]);
+
+  // Auto-select by id (e.g. the currently edited order)
+  useEffect(() => {
+    if (selectedPinId == null) { setSelectedIdx(null); return; }
+    const idx = orderPins.findIndex(p => p.id === selectedPinId);
+    if (idx >= 0) setSelectedIdx(idx);
+  }, [selectedPinId, orderPins]);
+
+  // Pan to selected pin & scroll the list
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !mapReady) return;
+    if (selectedIdx == null || !allPins[selectedIdx]) return;
+    const p = allPins[selectedIdx];
+    try { map.panTo([p.lat, p.lon], { flying: true, duration: 300 }); } catch {}
+    if (listRef.current) {
+      const el = listRef.current.children[selectedIdx];
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selectedIdx, mapReady, allPins]);
 
   const handleListClick = (idx) => {
     if (!allPins[idx]) return;
     setSelectedIdx(prev => prev === idx ? null : idx);
   };
 
-  const selectedGlow = useMemo(() => {
-    if (selectedIdx == null || !allPins[selectedIdx]) return null;
-    const p = allPins[selectedIdx];
-    const pos = pinToPixelPercent(p, center, zoom);
-    if (pos.x < -5 || pos.x > 105 || pos.y < -5 || pos.y > 105) return null;
-    return { ...pos, color: p.legendColor || "#64ffda" };
-  }, [selectedIdx, allPins, center, zoom]);
-
-  const legend = useMemo(() => {
-    const map = new Map();
-    resolvedPins.forEach(p => { if (p.legend && !map.has(p.legend)) map.set(p.legend, { color: p.legendColor || p.pinColor || "#999" }); });
-    if (highlightPin?.legend) map.set(highlightPin.legend, { color: highlightPin.legendColor || "#ff5252" });
-    homePins.forEach(p => { if (p.legend && !map.has(p.legend)) map.set(p.legend, { color: p.legendColor || "#999", isHome: true }); });
-    return [...map.entries()];
-  }, [resolvedPins, highlightPin, homePins]);
+  const handleSlotPinClick = (pinId) => {
+    if (!pinId || !pinIndexById.has(pinId)) return;
+    const idx = pinIndexById.get(pinId);
+    setSelectedIdx((prev) => prev === idx ? null : idx);
+  };
 
   return (
     <div style={{position:"fixed",inset:0,zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <style>{`
+        @keyframes crmPinBounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-7px)}}
+        @keyframes crmPinShadow{0%,100%{opacity:0.95;transform:translateX(-50%) scale(1)}50%{opacity:0.55;transform:translateX(-50%) scale(0.55)}}
+        @keyframes crmPinHalo{0%,100%{opacity:0.85;transform:translate(-50%,50%) scale(1)}50%{opacity:0.25;transform:translate(-50%,50%) scale(1.9)}}
+        .crm-pin-bounce{animation:crmPinBounce 1.3s ease-in-out infinite;transform-origin:50% 100%}
+      `}</style>
       <div onClick={onClose} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}} />
-      <div style={{position:"relative",width:700,maxWidth:"96vw",borderRadius:14,overflow:"hidden",boxShadow:"0 25px 60px rgba(0,0,0,0.6)",border:"1px solid rgba(255,255,255,0.1)",animation:"popIn 0.2s cubic-bezier(0.34,1.56,0.64,1)",background:"#1a1a2e"}}>
+      <div style={{position:"relative",width:1440,maxWidth:"99vw",borderRadius:14,overflow:"hidden",boxShadow:"0 25px 60px rgba(0,0,0,0.6)",border:"1px solid rgba(255,255,255,0.1)",animation:"popIn 0.2s cubic-bezier(0.34,1.56,0.64,1)",background:"#1a1a2e"}}>
         <div style={{background:"linear-gradient(135deg,#16213e,#0f3460)",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{color:"#fff",fontWeight:700,fontSize:13}}>{title} <span style={{fontSize:10,color:"#8892b0",fontWeight:400}}>({allPins.length} {allPins.length === 1 ? "точка" : "точек"}{geocoding ? ", загружаю..." : ""})</span></span>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.1)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
         {geocoding && <div style={{padding:"6px 16px",background:"rgba(100,255,218,0.08)",fontSize:11,color:"#64ffda",textAlign:"center"}}>⏳ Определяю координаты по адресам заказов...</div>}
-        <div ref={mapRef} style={{position:"relative",cursor:dragRef.current.dragging?"grabbing":"grab",userSelect:"none"}} onMouseDown={handleMouseDown} onClick={handleMapClick} onWheel={handleWheel}>
-          <img src={mapUrl} alt="Карта" draggable={false} style={{width:"100%",height:"auto",display:"block",minHeight:300,pointerEvents:"none"}} onError={(e)=>{e.target.style.display="none";}} />
-          {homePins.map((hp, i) => {
-            const pos = pinToPixelPercent(hp, center, zoom);
-            if (pos.x < -2 || pos.x > 102 || pos.y < -2 || pos.y > 102) return null;
-            return (
-              <div key={`home-${i}`} style={{position:"absolute",left:`${pos.x}%`,top:`${pos.y}%`,transform:"translate(-50%,-100%)",pointerEvents:"none",zIndex:3,display:"flex",flexDirection:"column",alignItems:"center"}}>
-                <div style={{fontSize:18,lineHeight:1,filter:`drop-shadow(0 0 4px ${hp.legendColor || "#fff"})`,textShadow:`0 0 6px ${hp.legendColor || "#fff"}`}}>🏠</div>
-                <div style={{fontSize:8,color:"#fff",fontWeight:800,textShadow:"0 0 3px #000, 0 0 6px #000",whiteSpace:"nowrap",marginTop:-2}}>{hp.label.replace("🏠 ","")}</div>
-              </div>
-            );
-          })}
-          {selectedGlow && (
-            <div style={{position:"absolute",left:`${selectedGlow.x}%`,top:`${selectedGlow.y}%`,transform:"translate(-50%,-50%)",pointerEvents:"none",zIndex:4}}>
-              <div style={{width:28,height:28,borderRadius:14,background:`radial-gradient(circle, ${selectedGlow.color} 0%, ${selectedGlow.color}aa 30%, transparent 70%)`,boxShadow:`0 0 12px 4px ${selectedGlow.color}bb`,animation:"mapGlow 1.5s ease-in-out infinite"}} />
-            </div>
-          )}
-          <div style={{position:"absolute",right:8,top:8,display:"flex",flexDirection:"column",gap:2,zIndex:5}}>
-            <button onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setZoom(z=>Math.min(z+1,18));}} style={{width:32,height:32,borderRadius:6,border:"none",background:"rgba(255,255,255,0.9)",color:"#333",fontSize:18,fontWeight:700,cursor:"pointer"}}>+</button>
-            <button onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setZoom(z=>Math.max(z-1,8));}} style={{width:32,height:32,borderRadius:6,border:"none",background:"rgba(255,255,255,0.9)",color:"#333",fontSize:18,fontWeight:700,cursor:"pointer"}}>−</button>
-          </div>
+        <div style={{position:"relative",background:"#1a1a2e"}}>
+          <div ref={mapContainerRef} style={{width:"100%",height:760,background:"#0a1a2e"}} />
+          {!mapReady && !mapError && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#64ffda",fontSize:12,pointerEvents:"none"}}>⏳ Загрузка карты…</div>}
+          {mapError && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#ff7a7a",fontSize:12,padding:20,textAlign:"center"}}>Не удалось загрузить карту: {mapError}</div>}
         </div>
-        {legend.length > 0 && (
-          <div style={{padding:"8px 16px",background:"#16213e",display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
-            {legend.map(([name, info]) => (
-              <div key={name} style={{display:"flex",alignItems:"center",gap:5}}>
-                {info.isHome ? <span style={{fontSize:12,lineHeight:1}}>🏠</span> : <div style={{width:10,height:10,borderRadius:5,background:info.color}} />}
-                <span style={{fontSize:11,color:"#ccd6f6"}}>{name}</span>
-              </div>
-            ))}
+        {slotRows?.length ? (
+          <div style={{padding:"12px 16px 16px",background:"#1a1a2e"}}>
+            <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Свободные часы</div>
+            <div style={{background:"rgba(255,255,255,0.03)",borderRadius:12,border:"1px solid rgba(255,255,255,0.06)",overflow:"auto",maxHeight:280}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
+                <thead>
+                  <tr>
+                    <th style={{padding:"10px 10px",color:"#5a6a8a",textAlign:"left",position:"sticky",left:0,background:"#1a1a2e",borderBottom:"1px solid rgba(255,255,255,0.06)",width:116,minWidth:116,fontSize:11}}>Мастер</th>
+                    {TIMES.map((t)=><th key={t} style={{padding:"10px 4px",color:"#64ffda",textAlign:"center",borderBottom:"1px solid rgba(255,255,255,0.06)",fontFamily:"monospace",fontSize:10,fontWeight:800,minWidth:78}}>{t}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {slotRows.map(({ master, slots }) => (
+                    <tr key={master.name}>
+                      <td style={{padding:"10px 10px",color:"#ccd6f6",fontWeight:600,whiteSpace:"nowrap",position:"sticky",left:0,background:"#1a1a2e",width:116,minWidth:116,fontSize:11,overflow:"hidden",textOverflow:"ellipsis"}}>
+                        <span style={{display:"inline-block",width:8,height:8,borderRadius:5,background:master.color,marginRight:8}} />
+                        {master.name}
+                      </td>
+                      {slots.map((slot) => {
+                        const selectedPin = slot.pinId && pinIndexById.get(slot.pinId) === selectedIdx;
+                        return (
+                          <td key={`${master.name}-${slot.ti}`} style={{padding:3,textAlign:"center"}}>
+                            {slot.off ? (
+                              <div style={{padding:"10px 4px",borderRadius:8,background:"rgba(255,255,255,0.03)",color:"#555",fontSize:9,minWidth:64}}>вых</div>
+                            ) : slot.notWorking ? (
+                              <div style={{padding:"10px 4px",borderRadius:8,background:"repeating-linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 5px, rgba(255,255,255,0.06) 5px, rgba(255,255,255,0.06) 10px)",border:"1px solid rgba(255,255,255,0.08)",color:"#6c748f",fontSize:9,fontWeight:700,minWidth:64}}>не раб</div>
+                            ) : slot.free || slot.selected ? (
+                              <div
+                                onClick={() => {
+                                  if (typeof onSlotSelect === "function" && slot.clickable) onSlotSelect(master.name, slot.ti);
+                                }}
+                                style={{padding:"10px 4px",borderRadius:8,background:slot.selected ? "rgba(100,255,218,0.3)" : "rgba(100,255,218,0.06)",border:slot.selected ? "2px solid #64ffda" : "1px solid rgba(100,255,218,0.15)",color:"#64ffda",fontWeight:800,fontSize:11,minWidth:64,cursor:slot.clickable ? "pointer" : "default"}}
+                              >
+                                ✓
+                              </div>
+                            ) : slot.pinId ? (
+                              <div
+                                onClick={() => handleSlotPinClick(slot.pinId)}
+                                style={{padding:"10px 4px",borderRadius:8,background:selectedPin?"rgba(255,193,7,0.2)":"rgba(255,82,82,0.1)",border:selectedPin?"2px solid #ffd166":"1px solid rgba(255,82,82,0.25)",color:selectedPin?"#ffd166":"#ef5350",fontSize:10,fontWeight:selectedPin?800:700,minWidth:64,cursor:"pointer"}}
+                              >
+                                занят
+                              </div>
+                            ) : (
+                              <div style={{padding:"10px 4px",borderRadius:8,background:"rgba(255,82,82,0.1)",color:"#ef5350",fontSize:10,fontWeight:700,minWidth:64}}>занят</div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
-        {allPins.length > 0 && (
+        ) : allPins.length > 0 && (
           <div ref={listRef} style={{padding:"8px 16px",background:"#1a1a2e",maxHeight:160,overflowY:"auto"}}>
             {allPins.map((p, i) => {
               const sel = i === selectedIdx;
@@ -973,7 +1157,7 @@ const MultiPinMapModal = ({ pins = [], homePins = [], title = "Карта зак
 };
 
 /* ====== ADDRESS INPUT ====== */
-const AddressInput = ({value, onChange, city, cities, onDistrictChange, onCoordsChange, disabled, initialCoords=null}) => {
+const AddressInput = ({value, onChange, city, cities, onDistrictChange, onCoordsChange, disabled, initialCoords=null, hasError=false}) => {
   const [sugs, setSugs] = useState([]);
   const [show, setShow] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
@@ -1033,8 +1217,8 @@ const AddressInput = ({value, onChange, city, cities, onDistrictChange, onCoords
     <div style={{position:"relative"}}>
       <div style={{display:"flex",gap:4}}>
         <input disabled={disabled} value={value} onChange={e=>{onChange(e.target.value);fetchSugs(e.target.value);}} onFocus={()=>{if(sugs.length)setShow(true);}} onBlur={()=>setTimeout(()=>setShow(false),300)}
-          placeholder={city?`Адрес в г. ${city}...`:"Введите адрес..."} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"9px 10px",color:disabled?"#8892b0":"#e6f1ff",fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}} />
-        <button disabled={disabled} onClick={openMap} type="button" style={{width:36,height:36,borderRadius:8,background:"rgba(100,255,218,0.15)",border:"1px solid rgba(100,255,218,0.3)",color:disabled?"#66739b":"#64ffda",fontSize:14,cursor:disabled?"not-allowed":"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}} title="Показать на карте">📍</button>
+          placeholder={city?`Адрес в г. ${city}...`:"Введите адрес..."} style={{flex:1,background:hasError?"rgba(255,107,107,0.09)":"rgba(255,255,255,0.06)",border:hasError?"1px solid rgba(255,107,107,0.52)":"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"9px 10px",color:disabled?"#8892b0":"#e6f1ff",fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",boxShadow:hasError?"0 0 0 1px rgba(255,107,107,0.08) inset":"none"}} />
+        <button disabled={disabled} onClick={openMap} type="button" style={{width:36,height:36,borderRadius:8,background:hasError?"rgba(255,107,107,0.16)":"rgba(100,255,218,0.15)",border:hasError?"1px solid rgba(255,107,107,0.4)":"1px solid rgba(100,255,218,0.3)",color:disabled?"#66739b":hasError?"#ff8f9a":"#64ffda",fontSize:14,cursor:disabled?"not-allowed":"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}} title="Показать на карте">📍</button>
       </div>
       {!disabled && show && sugs.length > 0 && (
         <div style={{position:"absolute",top:"100%",left:0,right:40,zIndex:100,background:"#1e1e38",border:"1px solid rgba(100,255,218,0.2)",borderRadius:8,marginTop:4,maxHeight:200,overflow:"auto",boxShadow:"0 8px 30px rgba(0,0,0,0.5)"}}>
@@ -1053,36 +1237,127 @@ const AddressInput = ({value, onChange, city, cities, onDistrictChange, onCoords
 };
 
 /* ====== SMALL COMPONENTS ====== */
-const SourceSelect = ({value,onChange,sources,onAdd,disabled}) => {
-  return (<div><div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Откуда узнали</div>
-    <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-      {sources.map(s=>(<button key={s} disabled={disabled} onClick={()=>onChange(s)} style={{padding:"4px 10px",borderRadius:7,fontSize:10,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",border:value===s?"2px solid #64ffda":"1px solid rgba(255,255,255,0.1)",background:value===s?"rgba(100,255,218,0.15)":"rgba(255,255,255,0.04)",color:value===s?"#64ffda":"#8892b0",fontWeight:value===s?700:400}}>{s}</button>))}
+const SourceSelect = ({value,onChange,sources,onAdd,disabled,hasError=false}) => {
+  return (<div><div style={{fontSize:10,color:hasError?"#ff8f9a":"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Откуда узнали</div>
+    <div style={{display:"flex",gap:4,flexWrap:"wrap",padding:hasError?6:0,borderRadius:10,border:hasError?"1px solid rgba(255,107,107,0.45)":"none",background:hasError?"rgba(255,107,107,0.06)":"transparent"}}>
+      {sources.map(s=>(<button key={s} disabled={disabled} onClick={()=>onChange(s)} style={{padding:"4px 10px",borderRadius:7,fontSize:10,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",border:value===s?"2px solid #64ffda":hasError?"1px solid rgba(255,107,107,0.22)":"1px solid rgba(255,255,255,0.1)",background:value===s?"rgba(100,255,218,0.15)":hasError?"rgba(255,107,107,0.06)":"rgba(255,255,255,0.04)",color:value===s?"#64ffda":hasError?"#ffb0b9":"#8892b0",fontWeight:value===s?700:400}}>{s}</button>))}
     </div></div>);
 };
 
-const Fld = ({label,value,onChange,multiline,type,placeholder,disabled,inputMode,autoComplete="off",name,suppressAutofillIcon=false,disabledTextColor}) => (
-  <div><div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>{label}</div>
-    {multiline?<textarea disabled={disabled} autoComplete={autoComplete} autoCorrect="off" autoCapitalize="off" spellCheck={false} value={value||""} onChange={e=>onChange(e.target.value)} rows={2} placeholder={placeholder} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"8px 10px",color:disabled?"#8892b0":"#e6f1ff",fontSize:12,resize:"vertical",fontFamily:"inherit",outline:"none",boxSizing:"border-box"}} />
-    :<input disabled={disabled} name={name} className={suppressAutofillIcon?"no-autofill-icon":undefined} type={type||"text"} inputMode={inputMode} autoComplete={autoComplete} autoCorrect="off" autoCapitalize="off" spellCheck={false} data-lpignore="true" data-form-type="other" value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{width:"100%",height:38,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"0 10px",color:disabled?(disabledTextColor || "#8892b0"):"#e6f1ff",fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",appearance:"textfield",MozAppearance:"textfield"}} />}</div>
+const Fld = ({label,value,onChange,multiline,type,placeholder,disabled,inputMode,autoComplete="off",name,suppressAutofillIcon=false,disabledTextColor,hasError=false}) => (
+  <div><div style={{fontSize:10,color:hasError?"#ff8f9a":"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>{label}</div>
+    {multiline?<textarea disabled={disabled} autoComplete={autoComplete} autoCorrect="off" autoCapitalize="off" spellCheck={false} value={value||""} onChange={e=>onChange(e.target.value)} rows={2} placeholder={placeholder} style={{width:"100%",background:hasError?"rgba(255,107,107,0.09)":"rgba(255,255,255,0.06)",border:hasError?"1px solid rgba(255,107,107,0.52)":"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"8px 10px",color:disabled?"#8892b0":"#e6f1ff",fontSize:12,resize:"vertical",fontFamily:"inherit",outline:"none",boxSizing:"border-box",boxShadow:hasError?"0 0 0 1px rgba(255,107,107,0.08) inset":"none"}} />
+    :<input disabled={disabled} name={name} className={suppressAutofillIcon?"no-autofill-icon":undefined} type={type||"text"} inputMode={inputMode} autoComplete={autoComplete} autoCorrect="off" autoCapitalize="off" spellCheck={false} data-lpignore="true" data-form-type="other" value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{width:"100%",height:38,background:hasError?"rgba(255,107,107,0.09)":"rgba(255,255,255,0.06)",border:hasError?"1px solid rgba(255,107,107,0.52)":"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"0 10px",color:disabled?(disabledTextColor || "#8892b0"):"#e6f1ff",fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",appearance:"textfield",MozAppearance:"textfield",boxShadow:hasError?"0 0 0 1px rgba(255,107,107,0.08) inset":"none"}} />}</div>
 );
 
-const PickerField = ({label,value,onChange,options,disabled,placeholder="Выбери..."}) => (
-  <div>
-    <div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>{label}</div>
-    <div style={{position:"relative"}}>
-      <select
+const PickerField = ({label,value,onChange,options,disabled,placeholder="Выбери..."}) => {
+  return (
+    <div>
+      <div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>{label}</div>
+      <CustomSelect
+        options={options}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
         disabled={disabled}
-        value={value || ""}
-        onChange={(e)=>onChange(e.target.value)}
-        style={{width:"100%",height:38,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"0 34px 0 12px",color:disabled?"#8892b0":(value ? "#e6f1ff" : "#8f9bb9"),fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",appearance:"none",WebkitAppearance:"none",MozAppearance:"none",cursor:disabled?"not-allowed":"pointer"}}
-      >
-        <option value="">{placeholder}</option>
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-      <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#8fa1ca",fontSize:11,pointerEvents:"none"}}>▾</span>
+        menuZIndex={1400}
+        triggerStyle={{ minHeight: 38, borderRadius: 10 }}
+      />
     </div>
-  </div>
-);
+  );
+};
+
+const MonthYearPicker = ({ month, year, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const monthColRef = useRef(null);
+  const yearColRef = useRef(null);
+  const years = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const startYear = Math.min(currentYear - 1, year);
+    const endYear = Math.max(currentYear + 3, year);
+    return Array.from({ length: endYear - startYear + 1 }, (_, index) => startYear + index);
+  }, [year]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutside = (event) => {
+      if (wrapRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("touchstart", closeOnOutside);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("touchstart", closeOnOutside);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const monthNode = monthColRef.current?.querySelector(`[data-month="${month}"]`);
+    const yearNode = yearColRef.current?.querySelector(`[data-year="${year}"]`);
+    monthNode?.scrollIntoView({ block: "center" });
+    yearNode?.scrollIntoView({ block: "center" });
+  }, [month, year, open]);
+
+  const applyMonth = (nextMonth) => onChange({ month: nextMonth, year });
+  const applyYear = (nextYear) => onChange({ month, year: nextYear });
+
+  return (
+    <div ref={wrapRef} className="pill" style={{height:38,padding:"0 12px",borderRadius:12,display:"inline-flex",alignItems:"center",position:"relative"}}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="tb"
+        style={{height:38,display:"inline-flex",alignItems:"center",gap:8,background:"transparent",border:"none",padding:0,color:"#9fb1d1",fontSize:12,fontWeight:600,fontFamily:"inherit"}}
+      >
+        <span>{formatMonthYearLabel(month, year)}</span>
+        <span style={{fontSize:11,opacity:0.8}}>▾</span>
+      </button>
+      {open && (
+        <div style={{position:"absolute",top:44,left:0,width:260,borderRadius:16,background:"linear-gradient(180deg,#1d2140,#15182e)",border:"1px solid rgba(255,255,255,0.1)",boxShadow:"0 24px 60px rgba(0,0,0,0.42)",padding:12,zIndex:1300}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 88px",gap:10}}>
+            <div>
+              <div style={{fontSize:10,color:"#8fa1ca",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Месяц</div>
+              <div ref={monthColRef} style={{maxHeight:260,overflowY:"auto",paddingRight:4}}>
+                {MONTHS.map((monthName, monthIndex) => (
+                  <button
+                    key={monthName}
+                    data-month={monthIndex}
+                    type="button"
+                    onClick={() => applyMonth(monthIndex)}
+                    className="tb"
+                    style={{width:"100%",height:34,padding:"0 10px",borderRadius:10,border:month===monthIndex?"1px solid rgba(120,230,255,0.42)":"1px solid transparent",background:month===monthIndex?"rgba(80,220,255,0.16)":"transparent",color:month===monthIndex?"#dff7ff":"#c7d4f6",fontSize:12,fontWeight:month===monthIndex?800:600,textAlign:"left",fontFamily:"inherit"}}
+                  >
+                    {monthName}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{fontSize:10,color:"#8fa1ca",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Год</div>
+              <div ref={yearColRef} style={{maxHeight:260,overflowY:"auto",paddingRight:4}}>
+                {years.map((itemYear) => (
+                  <button
+                    key={itemYear}
+                    data-year={itemYear}
+                    type="button"
+                    onClick={() => applyYear(itemYear)}
+                    className="tb"
+                    style={{width:"100%",height:34,padding:"0 10px",borderRadius:10,border:year===itemYear?"1px solid rgba(120,230,255,0.42)":"1px solid transparent",background:year===itemYear?"rgba(80,220,255,0.16)":"transparent",color:year===itemYear?"#dff7ff":"#c7d4f6",fontSize:12,fontWeight:year===itemYear?800:600,textAlign:"left",fontFamily:"inherit"}}
+                  >
+                    {String(itemYear).slice(-2)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const DatePickerField = ({label,value,onChange,disabled}) => (
   <div>
@@ -1159,30 +1434,30 @@ const DateRangeField = ({ label, value, onChange, onReset }) => {
   );
 };
 
-const CellPreview = ({data, statusMap}) => {
+const CellPreview = ({data, statusMap, scheduleConflict = false}) => {
   const meta = statusMeta(data.status || "Новый", statusMap);
   const attention = getOfficeAttentionIndicator(data);
   const contentInset = attention ? 28 : 0;
   const statusLabel = data.status === "Подтвержден мастером" ? "Мастер. подт." : (data.status || "Новый");
   const statusFontSize = statusLabel.length > 20 ? 7.7 : 8.8;
   return (
-  <div style={{fontSize:8,lineHeight:1.05,overflow:"hidden",height:"100%",display:"flex",flexDirection:"column",justifyContent:"space-between",gap:3,color:meta.cardText}}>
+  <div style={{fontSize:8,lineHeight:1.05,overflow:"hidden",height:"100%",display:"flex",flexDirection:"column",justifyContent:"space-between",gap:3,color:scheduleConflict?"#c9ccd7":meta.cardText,textDecoration:scheduleConflict?"line-through":"none",opacity:scheduleConflict?0.86:1,filter:scheduleConflict?"grayscale(0.92)":"none"}}>
     <div style={{minHeight:0,overflow:"hidden"}}>
       <div style={{position:"relative",paddingLeft:contentInset}}>
         {attention && <span style={{position:"absolute",left:0,top:0,display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:999,background:"rgba(217,107,121,0.18)",border:"1px solid rgba(217,107,121,0.5)",color:"#B4243A",fontSize:12,fontWeight:900}}>{attention}</span>}
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:6}}>
-          <div style={{fontWeight:900,color:meta.cardText,fontSize:10.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:"1 1 auto"}}>{data.district}</div>
-          {!!data.displayPrice && <div style={{color:meta.cardText,fontSize:10.5,fontWeight:900,whiteSpace:"nowrap",flexShrink:0,textAlign:"right",paddingRight:2}}>{data.displayPrice}₽</div>}
+          <div style={{fontWeight:900,color:scheduleConflict?"#d4d7e3":meta.cardText,fontSize:10.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:"1 1 auto"}}>{data.district}</div>
+          {!!data.displayPrice && <div style={{color:scheduleConflict?"#d4d7e3":meta.cardText,fontSize:10.5,fontWeight:900,whiteSpace:"nowrap",flexShrink:0,textAlign:"right",paddingRight:2}}>{data.displayPrice}₽</div>}
         </div>
         <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:2,minWidth:0}}>
-          <div style={{color:meta.cardText,fontWeight:500,fontSize:9.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:"1 1 auto"}}>{data.name}</div>
-          <div style={{color:"rgba(30,53,80,0.72)",fontSize:8,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flexShrink:0,textAlign:"right",paddingRight:2}}>+7{fmtPh(data.phone)}</div>
+          <div style={{color:scheduleConflict?"#d4d7e3":meta.cardText,fontWeight:500,fontSize:9.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:"1 1 auto"}}>{data.name}</div>
+          <div style={{color:scheduleConflict?"rgba(212,215,227,0.84)":"rgba(30,53,80,0.72)",fontSize:8,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flexShrink:0,textAlign:"right",paddingRight:2}}>+7{fmtPh(data.phone)}</div>
         </div>
       </div>
     </div>
-    <div style={{paddingTop:3,borderTop:`1px solid ${meta.cardBorder}`,display:"flex",gap:6,alignItems:"center",justifyContent:"space-between",flexWrap:"nowrap",minWidth:0,flexShrink:0}}>
-      <span style={{padding:"3px 9px",borderRadius:8,background:"rgba(255,196,77,0.88)",color:"#2b2200",fontSize:8.8,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"32%"}}>{data.createdByName || "Без автора"}</span>
-      <span style={{padding:"3px 12px",borderRadius:999,background:meta.pillBg,border:`1px solid ${meta.pillBorder}`,color:meta.pillText,fontSize:statusFontSize,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"68%",marginLeft:"auto",boxSizing:"border-box"}}>{statusLabel}</span>
+    <div style={{paddingTop:3,borderTop:`1px solid ${scheduleConflict ? "rgba(255,255,255,0.16)" : meta.cardBorder}`,display:"flex",gap:6,alignItems:"center",justifyContent:"space-between",flexWrap:"nowrap",minWidth:0,flexShrink:0}}>
+      <span style={{padding:"3px 9px",borderRadius:8,background:scheduleConflict?"rgba(255,255,255,0.14)":"rgba(255,196,77,0.88)",color:scheduleConflict?"#eef2ff":"#2b2200",fontSize:8.8,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"32%"}}>{data.createdByName || "Без автора"}</span>
+      <span style={{padding:"3px 12px",borderRadius:999,background:scheduleConflict?"rgba(255,255,255,0.12)":meta.pillBg,border:`1px solid ${scheduleConflict ? "rgba(255,255,255,0.24)" : meta.pillBorder}`,color:scheduleConflict?"#eef2ff":meta.pillText,fontSize:statusFontSize,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"68%",marginLeft:"auto",boxSizing:"border-box"}}>{statusLabel}</span>
     </div>
   </div>
   );
@@ -1292,6 +1567,8 @@ const EmployeeEditorPopup = ({employee,currentUser,cities,services,onSave,onClos
     residenceAddress: employee?.residenceAddress || "",
     residenceLat: employee?.residenceLat ?? null,
     residenceLng: employee?.residenceLng ?? null,
+    workSchedule: normalizeWorkSchedule(employee?.workSchedule),
+    workScheduleEffectiveFrom: employee?.workScheduleEffectiveFrom || "",
   });
   const [scopeDraft,setScopeDraft]=useState({ directionId:"", subcategoryId:"" });
   useEffect(() => {
@@ -1313,6 +1590,8 @@ const EmployeeEditorPopup = ({employee,currentUser,cities,services,onSave,onClos
       residenceAddress: employee?.residenceAddress || "",
       residenceLat: employee?.residenceLat ?? null,
       residenceLng: employee?.residenceLng ?? null,
+      workSchedule: normalizeWorkSchedule(employee?.workSchedule),
+      workScheduleEffectiveFrom: employee?.workScheduleEffectiveFrom || "",
     });
     setScopeDraft({ directionId:"", subcategoryId:"" });
   }, [employee]);
@@ -1363,83 +1642,185 @@ const EmployeeEditorPopup = ({employee,currentUser,cities,services,onSave,onClos
     if (readOnly) return;
     setForm((prev) => ({ ...prev, serviceScopes: prev.serviceScopes.filter((scope) => scope.directionId !== directionId) }));
   };
+  const toggleWorkSlot = (dayIdx, slotIdx) => {
+    if (readOnly) return;
+    setForm((prev) => {
+      const nextSchedule = normalizeWorkSchedule(prev.workSchedule);
+      nextSchedule[String(dayIdx)][slotIdx] = !nextSchedule[String(dayIdx)][slotIdx];
+      return { ...prev, workSchedule: nextSchedule, workScheduleEffectiveFrom: dstr(new Date()) };
+    });
+  };
+  const selectedScheduleDays = useMemo(() => {
+    const schedule = normalizeWorkSchedule(form.workSchedule);
+    return WEEKDAY_BUTTONS.filter((day) => (schedule[String(day.value)] || []).some(Boolean));
+  }, [form.workSchedule]);
+  const selectedScheduleRow = useMemo(() => {
+    const schedule = normalizeWorkSchedule(form.workSchedule);
+    if (!selectedScheduleDays.length) return Array(TIMES.length).fill(false);
+    return TIMES.map((_, slotIdx) => selectedScheduleDays.every((day) => schedule[String(day.value)]?.[slotIdx] !== false));
+  }, [form.workSchedule, selectedScheduleDays]);
+  const toggleScheduleDay = (dayIdx) => {
+    if (readOnly) return;
+    setForm((prev) => {
+      const nextSchedule = normalizeWorkSchedule(prev.workSchedule);
+      const key = String(dayIdx);
+      const isSelected = (nextSchedule[key] || []).some(Boolean);
+      nextSchedule[key] = Array(TIMES.length).fill(!isSelected);
+      return { ...prev, workSchedule: nextSchedule, workScheduleEffectiveFrom: dstr(new Date()) };
+    });
+  };
+  const toggleSelectedScheduleSlot = (slotIdx) => {
+    if (readOnly || !selectedScheduleDays.length) return;
+    setForm((prev) => {
+      const nextSchedule = normalizeWorkSchedule(prev.workSchedule);
+      const shouldEnable = !selectedScheduleDays.every((day) => nextSchedule[String(day.value)]?.[slotIdx] !== false);
+      selectedScheduleDays.forEach((day) => {
+        nextSchedule[String(day.value)][slotIdx] = shouldEnable;
+      });
+      return { ...prev, workSchedule: nextSchedule, workScheduleEffectiveFrom: dstr(new Date()) };
+    });
+  };
+  const cardWidth = isLimitedCallCenterViewer ? "min(96vw, 860px)" : "min(98vw, 1480px)";
   return (
     <>
       <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:1003,backdropFilter:"blur(2px)"}} />
-      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:1004,width:430,maxWidth:"92vw",maxHeight:"88vh",background:"#141427",borderRadius:14,boxShadow:"0 25px 60px rgba(0,0,0,0.6)",overflow:"hidden",border:"1px solid rgba(255,255,255,0.08)",filter:dimmed?"blur(2px) saturate(0.9)":"none",opacity:dimmed?0.82:1,pointerEvents:dimmed?"none":"auto",transition:"filter 0.18s ease, opacity 0.18s ease"}}>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:1004,width:cardWidth,maxHeight:"92vh",background:"#141427",borderRadius:18,boxShadow:"0 25px 60px rgba(0,0,0,0.6)",overflow:"hidden",border:"1px solid rgba(255,255,255,0.08)",filter:dimmed?"blur(2px) saturate(0.9)":"none",opacity:dimmed?0.82:1,pointerEvents:dimmed?"none":"auto",transition:"filter 0.18s ease, opacity 0.18s ease"}}>
         <div style={{background:"linear-gradient(135deg,#16213e,#0f3460)",padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{color:"#fff",fontWeight:700,fontSize:14}}>{isNew ? "🧑‍💼 Новый сотрудник" : "Карточка сотрудника"}</span>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.1)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
-        <div style={{padding:16,display:"flex",flexDirection:"column",gap:10,overflowY:"auto",maxHeight:"calc(88vh - 58px)"}}>
-          <Fld label={`Имя ${entityLabel}`} disabled={readOnly} value={form.name} onChange={(value)=>setForm((prev)=>({...prev,name:value}))} placeholder="Иван Петров" />
-          <div><div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Телефон {entityLabel}</div><PhoneInput disabled={readOnly} value={form.phone} onChange={(value)=>setForm((prev)=>({...prev,phone:value}))} /></div>
-          {isAdminViewer && (
-            <>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <Fld label={`Логин ${entityLabel}`} disabled disabledTextColor="#8899bd" value={form.login} onChange={(value)=>setForm((prev)=>({...prev,login:value}))} placeholder="Введите логин" />
-                <Fld label={`Пароль ${entityLabel}`} disabled disabledTextColor="#8899bd" value={form.password} onChange={(value)=>setForm((prev)=>({...prev,password:value}))} placeholder={employee?.authUserId ? "Пароль скрыт" : "Введите пароль"} type="password" />
-              </div>
-              <div style={{fontSize:10,color:"#5a6a8a",marginTop:-4}}>{employee?.authUserId ? "Логин хранится в CRM. Пароль после выдачи доступа не показывается, его можно только изменить." : "Эти данные можно использовать для выдачи доступа в CRM."}</div>
-              <Fld label="Серия и номер" disabled={readOnly || !isAdminViewer} value={form.passportSeriesNumber} onChange={(value)=>setForm((prev)=>({...prev,passportSeriesNumber:value}))} placeholder="0000 000000" />
-              <Fld label="Кем выдан" disabled={readOnly || !isAdminViewer} value={form.passportIssuedBy} onChange={(value)=>setForm((prev)=>({...prev,passportIssuedBy:value}))} placeholder={"Отделением УФМС...\nРайон...\nГород..."} multiline />
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <Fld label="Код организации" disabled={readOnly || !isAdminViewer} value={form.passportCode} onChange={(value)=>setForm((prev)=>({...prev,passportCode:value}))} placeholder="000-000" />
-                <DatePickerField label="Когда выдан" disabled={readOnly || !isAdminViewer} value={form.passportIssuedAt} onChange={(value)=>setForm((prev)=>({...prev,passportIssuedAt:value}))} />
-              </div>
-            </>
-          )}
-          {form.type === "technician" && isAdminViewer && (
-            <div>
-              <div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Адрес фактического проживания</div>
-              <AddressInput
-                disabled={readOnly || !isAdminViewer}
-                value={form.residenceAddress}
-                onChange={(value)=>setForm((prev)=>({...prev,residenceAddress:value}))}
-                onCoordsChange={({ lat, lng })=>setForm((prev)=>({...prev,residenceLat:lat,residenceLng:lng}))}
-                city={form.city}
-                cities={cities}
-                initialCoords={form.residenceLat != null && form.residenceLng != null ? { lat: form.residenceLat, lon: form.residenceLng } : null}
-              />
-            </div>
-          )}
-          {isAdminViewer && <PickerField label="Роль сотрудника" disabled={readOnly} value={form.type} onChange={(value)=>setForm((prev)=>({...prev,type:value,city:value==="technician"?prev.city:""}))} options={[{ value:"technician", label:"Мастер" }, { value:"call_center", label:"Колл-центр" }]} placeholder="Выберите роль" />}
-          {form.type==="technician" && isAdminViewer && <PickerField label="Город" disabled={readOnly} value={form.city} onChange={(value)=>setForm((prev)=>({...prev,city:value}))} options={Object.keys(cities).map((cityName) => ({ value:cityName, label:cityName }))} placeholder="Выберите город" />}
-          {form.type==="technician" && isAdminViewer && <div>
-            <div style={{fontSize:10,color:"#8892b0",marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>Навыки</div>
-            <div style={{display:"flex",flexDirection:"column",gap:10,padding:"10px 12px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)"}}>
-              <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.25fr) minmax(0,1.25fr) 68px",gap:8,alignItems:"end"}}>
-                <PickerField label="Направление" disabled={readOnly || !skillDirectionOptions.length} value={scopeDraft.directionId} onChange={(value)=>setScopeDraft({ directionId:value, subcategoryId:"" })} options={skillDirectionOptions} placeholder="Выбрать" />
-                <PickerField label="Подуслуга" disabled={readOnly || !scopeDraft.directionId} value={scopeDraft.subcategoryId} onChange={(value)=>setScopeDraft((prev)=>({...prev,subcategoryId:value}))} options={skillSubcategoryOptions} placeholder="Выбрать" />
-                <button type="button" disabled={readOnly || !scopeDraft.directionId || !scopeDraft.subcategoryId} onClick={addScope} style={{height:38,width:"100%",padding:0,borderRadius:10,border:"1px solid rgba(100,255,218,0.22)",background:(!readOnly && scopeDraft.directionId && scopeDraft.subcategoryId)?"rgba(100,255,218,0.1)":"rgba(255,255,255,0.08)",color:(!readOnly && scopeDraft.directionId && scopeDraft.subcategoryId)?"#cffff3":"#8f9bb9",fontSize:11,fontWeight:800,cursor:(!readOnly && scopeDraft.directionId && scopeDraft.subcategoryId)?"pointer":"not-allowed",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{color:(!readOnly && scopeDraft.directionId && scopeDraft.subcategoryId)?"#64ffda":"#8f9bb9",fontSize:24,lineHeight:1,fontWeight:900}}>+</span>
-                </button>
-              </div>
-              {form.serviceScopes.length ? <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {groupedScopes.map((group) => (
-                  <div key={group.directionId} style={{display:"inline-flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:999,border:"1px solid rgba(100,255,218,0.22)",background:"rgba(100,255,218,0.1)",color:"#cffff3",fontSize:10,fontWeight:700}}>
-                    <span>{group.directionName} / {group.subcategories.map((scope) => scope.subcategoryName).join(", ")}</span>
-                    <button type="button" disabled={readOnly} onClick={() => removeDirectionScopes(group.directionId)} style={{background:"transparent",border:"none",padding:0,color:readOnly?"#7f92ba":"#64ffda",fontSize:12,cursor:readOnly?"not-allowed":"pointer",fontFamily:"inherit"}}>✕</button>
+        <div style={{padding:18,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",maxHeight:"calc(92vh - 58px)"}}>
+          <div style={{display:"grid",gridTemplateColumns:isLimitedCallCenterViewer?"minmax(0,1fr)":"minmax(340px,420px) minmax(0,1fr)",gap:14,alignItems:"start"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{padding:"14px 16px",borderRadius:14,background:"rgba(255,255,255,0.035)",border:"1px solid rgba(255,255,255,0.08)",display:"flex",flexDirection:"column",gap:10}}>
+                <Fld label={`Имя ${entityLabel}`} disabled={readOnly} value={form.name} onChange={(value)=>setForm((prev)=>({...prev,name:value}))} placeholder="Иван Петров" />
+                <div><div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Телефон {entityLabel}</div><PhoneInput disabled={readOnly} value={form.phone} onChange={(value)=>setForm((prev)=>({...prev,phone:value}))} /></div>
+                {isAdminViewer && <PickerField label="Роль сотрудника" disabled={readOnly} value={form.type} onChange={(value)=>setForm((prev)=>({...prev,type:value,city:value==="technician"?prev.city:""}))} options={[{ value:"technician", label:"Мастер" }, { value:"call_center", label:"Колл-центр" }]} placeholder="Выберите роль" />}
+                {form.type==="technician" && isAdminViewer && <PickerField label="Город" disabled={readOnly} value={form.city} onChange={(value)=>setForm((prev)=>({...prev,city:value}))} options={Object.keys(cities).map((cityName) => ({ value:cityName, label:cityName }))} placeholder="Выберите город" />}
+                <div>
+                  <div style={{fontSize:10,color:"#8892b0",marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>Цвет</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{MCOLORS.map(c=>(<div key={c} onClick={()=>{if(readOnly)return;setForm((prev)=>({...prev,color:c}));}} style={{width:26,height:26,borderRadius:7,background:c,cursor:readOnly?"default":"pointer",border:form.color===c?"3px solid #fff":"3px solid transparent"}} />))}</div>
+                </div>
+                {form.type === "technician" && isAdminViewer && (
+                  <div>
+                    <div style={{fontSize:10,color:"#8892b0",marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>Адрес фактического проживания</div>
+                    <AddressInput
+                      disabled={readOnly || !isAdminViewer}
+                      value={form.residenceAddress}
+                      onChange={(value)=>setForm((prev)=>({...prev,residenceAddress:value}))}
+                      onCoordsChange={({ lat, lng })=>setForm((prev)=>({...prev,residenceLat:lat,residenceLng:lng}))}
+                      city={form.city}
+                      cities={cities}
+                      initialCoords={form.residenceLat != null && form.residenceLng != null ? { lat: form.residenceLat, lon: form.residenceLng } : null}
+                    />
                   </div>
-                ))}
-              </div> : <div style={{fontSize:10,color:"#7f92ba"}}>Сначала выбери направление и подуслугу, потом добавь навык мастеру.</div>}
-              {!skillDirectionOptions.length && <div style={{fontSize:10,color:"#7f92ba"}}>Сначала добавь направления и типы работ в справочнике услуг.</div>}
+                )}
+                {!isNew && isAdminViewer && <div style={{display:"flex",alignItems:"center",gap:8,fontSize:11,color:isEmployeeOnline(employee) ? "#8ce99a" : "#ff8a80"}}>
+                  <span style={{width:10,height:10,borderRadius:5,background:isEmployeeOnline(employee) ? "#4caf50" : "#ef5350",display:"inline-block"}} />
+                  {isEmployeeOnline(employee) ? "в сети" : "не в сети"}
+                </div>}
+                {isLimitedCallCenterViewer && <div style={{fontSize:10,color:"#5a6a8a"}}>Колл-центр видит только имя, телефон и цвет сотрудника.</div>}
+              </div>
+              {isAdminViewer && (
+                <div style={{padding:"14px 16px",borderRadius:14,background:"rgba(255,255,255,0.035)",border:"1px solid rgba(255,255,255,0.08)",display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <Fld label={`Логин ${entityLabel}`} disabled disabledTextColor="#8899bd" value={form.login} onChange={(value)=>setForm((prev)=>({...prev,login:value}))} placeholder="Введите логин" />
+                    <Fld label={`Пароль ${entityLabel}`} disabled disabledTextColor="#8899bd" value={form.password} onChange={(value)=>setForm((prev)=>({...prev,password:value}))} placeholder={employee?.authUserId ? "Пароль скрыт" : "Введите пароль"} type="password" />
+                  </div>
+                  <div style={{fontSize:10,color:"#5a6a8a"}}>{employee?.authUserId ? "Логин хранится в CRM. Пароль после выдачи доступа не показывается, его можно только изменить." : "Эти данные можно использовать для выдачи доступа в CRM."}</div>
+                  {!isNew && <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {!employee?.authUserId && <button onClick={onProvisionAccess} style={{padding:"8px 10px",borderRadius:8,border:"1px solid rgba(100,255,218,0.2)",background:"rgba(100,255,218,0.08)",color:"#64ffda",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Выдать доступ</button>}
+                    {employee?.authUserId && <button onClick={onEditAccess} style={{padding:"8px 10px",borderRadius:8,border:"1px solid rgba(121,134,203,0.22)",background:"rgba(121,134,203,0.10)",color:"#b9c4ff",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Изменить доступ</button>}
+                    {form.type==="call_center" && <button onClick={onOpenPermissions} style={{padding:"8px 10px",borderRadius:8,border:"1px solid rgba(100,255,218,0.2)",background:"rgba(100,255,218,0.08)",color:"#64ffda",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Права доступа</button>}
+                  </div>}
+                  {employee?.authUserId && !isNew && <div style={{fontSize:10,color:"#8ce99a"}}>Доступ в CRM выдан</div>}
+                  {!employee?.authUserId && !isNew && <div style={{fontSize:10,color:"#ffb4bf"}}>Доступ в CRM ещё не выдан</div>}
+                </div>
+              )}
             </div>
-          </div>}
-          <div><div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Цвет</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{MCOLORS.map(c=>(<div key={c} onClick={()=>{if(readOnly)return;setForm((prev)=>({...prev,color:c}));}} style={{width:24,height:24,borderRadius:6,background:c,cursor:readOnly?"default":"pointer",border:form.color===c?"3px solid #fff":"3px solid transparent"}} />))}</div></div>
-          {!isNew && isAdminViewer && <div style={{display:"flex",alignItems:"center",gap:8,fontSize:11,color:isEmployeeOnline(employee) ? "#8ce99a" : "#ff8a80"}}>
-            <span style={{width:10,height:10,borderRadius:5,background:isEmployeeOnline(employee) ? "#4caf50" : "#ef5350",display:"inline-block"}} />
-            {isEmployeeOnline(employee) ? "в сети" : "не в сети"}
-          </div>}
-          {!isNew && isAdminViewer && <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            {!employee?.authUserId && <button onClick={onProvisionAccess} style={{padding:"8px 10px",borderRadius:8,border:"1px solid rgba(100,255,218,0.2)",background:"rgba(100,255,218,0.08)",color:"#64ffda",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Выдать доступ</button>}
-            {employee?.authUserId && <button onClick={onEditAccess} style={{padding:"8px 10px",borderRadius:8,border:"1px solid rgba(121,134,203,0.22)",background:"rgba(121,134,203,0.10)",color:"#b9c4ff",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Изменить доступ</button>}
-            {form.type==="call_center" && <button onClick={onOpenPermissions} style={{padding:"8px 10px",borderRadius:8,border:"1px solid rgba(100,255,218,0.2)",background:"rgba(100,255,218,0.08)",color:"#64ffda",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Права доступа</button>}
-          </div>}
-          {employee?.authUserId && isAdminViewer && <div style={{fontSize:10,color:"#8ce99a"}}>Доступ в CRM выдан</div>}
-          {!employee?.authUserId && !isNew && isAdminViewer && <div style={{fontSize:10,color:"#ffb4bf"}}>Доступ в CRM ещё не выдан</div>}
-          {isLimitedCallCenterViewer && <div style={{fontSize:10,color:"#5a6a8a",textAlign:"center"}}>Колл-центр видит только имя, телефон и цвет сотрудника.</div>}
-          <button onClick={()=>{if(canSave)onSave({...form, passport: serializePassportCard({ seriesNumber: form.passportSeriesNumber, issuedBy: form.passportIssuedBy, code: form.passportCode, issuedAt: form.passportIssuedAt })});}} disabled={!canSave || saving} style={{padding:"11px 0",borderRadius:10,border:"none",background:(canSave && !saving)?"linear-gradient(135deg,#64ffda,#00bfa5)":"#333",color:(canSave && !saving)?"#0a0a23":"#666",fontWeight:800,fontSize:13,cursor:(canSave && !saving)?"pointer":"not-allowed",fontFamily:"inherit"}}>{saving ? "Сохраняю..." : (isNew ? "+ Добавить" : "Сохранить карточку")}</button>
+
+            {!isLimitedCallCenterViewer && (
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                {isAdminViewer && (
+                  <div style={{padding:"14px 16px",borderRadius:14,background:"rgba(255,255,255,0.035)",border:"1px solid rgba(255,255,255,0.08)",display:"flex",flexDirection:"column",gap:10}}>
+                    <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1}}>Паспортные данные</div>
+                    <Fld label="Серия и номер" disabled={readOnly || !isAdminViewer} value={form.passportSeriesNumber} onChange={(value)=>setForm((prev)=>({...prev,passportSeriesNumber:value}))} placeholder="0000 000000" />
+                    <Fld label="Кем выдан" disabled={readOnly || !isAdminViewer} value={form.passportIssuedBy} onChange={(value)=>setForm((prev)=>({...prev,passportIssuedBy:value}))} placeholder={"Отделением УФМС...\nРайон...\nГород..."} multiline />
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      <Fld label="Код организации" disabled={readOnly || !isAdminViewer} value={form.passportCode} onChange={(value)=>setForm((prev)=>({...prev,passportCode:value}))} placeholder="000-000" />
+                      <DatePickerField label="Когда выдан" disabled={readOnly || !isAdminViewer} value={form.passportIssuedAt} onChange={(value)=>setForm((prev)=>({...prev,passportIssuedAt:value}))} />
+                    </div>
+                  </div>
+                )}
+                {form.type==="technician" && isAdminViewer && <div style={{padding:"14px 16px",borderRadius:14,background:"rgba(255,255,255,0.035)",border:"1px solid rgba(255,255,255,0.08)",display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{fontSize:10,color:"#8892b0",marginBottom:2,textTransform:"uppercase",letterSpacing:1}}>Навыки</div>
+                  <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.1fr) minmax(0,1.1fr) 68px",gap:8,alignItems:"end"}}>
+                    <PickerField label="Направление" disabled={readOnly || !skillDirectionOptions.length} value={scopeDraft.directionId} onChange={(value)=>setScopeDraft({ directionId:value, subcategoryId:"" })} options={skillDirectionOptions} placeholder="Выбрать" />
+                    <PickerField label="Подуслуга" disabled={readOnly || !scopeDraft.directionId} value={scopeDraft.subcategoryId} onChange={(value)=>setScopeDraft((prev)=>({...prev,subcategoryId:value}))} options={skillSubcategoryOptions} placeholder="Выбрать" />
+                    <button type="button" disabled={readOnly || !scopeDraft.directionId || !scopeDraft.subcategoryId} onClick={addScope} style={{height:38,width:"100%",padding:0,borderRadius:10,border:"1px solid rgba(100,255,218,0.22)",background:(!readOnly && scopeDraft.directionId && scopeDraft.subcategoryId)?"rgba(100,255,218,0.1)":"rgba(255,255,255,0.08)",color:(!readOnly && scopeDraft.directionId && scopeDraft.subcategoryId)?"#cffff3":"#8f9bb9",fontSize:11,fontWeight:800,cursor:(!readOnly && scopeDraft.directionId && scopeDraft.subcategoryId)?"pointer":"not-allowed",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                      <span style={{color:(!readOnly && scopeDraft.directionId && scopeDraft.subcategoryId)?"#64ffda":"#8f9bb9",fontSize:24,lineHeight:1,fontWeight:900}}>+</span>
+                    </button>
+                  </div>
+                  {form.serviceScopes.length ? <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {groupedScopes.map((group) => (
+                      <div key={group.directionId} style={{display:"inline-flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:999,border:"1px solid rgba(100,255,218,0.22)",background:"rgba(100,255,218,0.1)",color:"#cffff3",fontSize:10,fontWeight:700}}>
+                        <span>{group.directionName} / {group.subcategories.map((scope) => scope.subcategoryName).join(", ")}</span>
+                        <button type="button" disabled={readOnly} onClick={() => removeDirectionScopes(group.directionId)} style={{background:"transparent",border:"none",padding:0,color:readOnly?"#7f92ba":"#64ffda",fontSize:12,cursor:readOnly?"not-allowed":"pointer",fontFamily:"inherit"}}>✕</button>
+                      </div>
+                    ))}
+                  </div> : <div style={{fontSize:10,color:"#7f92ba"}}>Сначала выбери направление и подуслугу, потом добавь навык мастеру.</div>}
+                  {!skillDirectionOptions.length && <div style={{fontSize:10,color:"#7f92ba"}}>Сначала добавь направления и типы работ в справочнике услуг.</div>}
+                </div>}
+                {form.type==="technician" && isAdminViewer && (
+                  <div style={{padding:"14px 16px",borderRadius:14,background:"rgba(255,255,255,0.035)",border:"1px solid rgba(255,255,255,0.08)",display:"flex",flexDirection:"column",gap:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+                      <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1}}>График мастера</div>
+                      <div style={{fontSize:10,color:"#7f92ba"}}>Выбери рабочие дни, затем отметь рабочие часы</div>
+                    </div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {WEEKDAY_BUTTONS.map((day) => (
+                        <button
+                          key={day.value}
+                          type="button"
+                          disabled={readOnly}
+                          onClick={()=>toggleScheduleDay(day.value)}
+                          style={{padding:"6px 12px",borderRadius:999,border:selectedScheduleDays.some((item)=>item.value===day.value)?"1px solid #64ffda":"1px solid rgba(255,255,255,0.1)",background:selectedScheduleDays.some((item)=>item.value===day.value)?"rgba(100,255,218,0.14)":"rgba(255,255,255,0.04)",color:selectedScheduleDays.some((item)=>item.value===day.value)?"#64ffda":"#9fb1d1",fontSize:11,fontWeight:700,cursor:readOnly?"default":"pointer",fontFamily:"inherit"}}
+                        >{day.label}</button>
+                      ))}
+                    </div>
+	                    <div style={{background:"rgba(7,12,34,0.45)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:12,padding:"12px 12px 14px",display:"flex",flexDirection:"column",gap:10}}>
+	                      <div style={{display:"grid",gridTemplateColumns:`repeat(${TIMES.length}, minmax(0, 1fr))`,gap:6}}>
+	                        {TIMES.map((time)=>(
+	                          <div key={time} style={{padding:"4px 0 8px",textAlign:"center",color:"#64ffda",fontFamily:"monospace",fontWeight:800,fontSize:11}}>{time}</div>
+	                        ))}
+	                      </div>
+	                      {selectedScheduleDays.length ? (
+	                        <div style={{display:"grid",gridTemplateColumns:`repeat(${TIMES.length}, minmax(0, 1fr))`,gap:6}}>
+	                          {TIMES.map((_, slotIdx) => {
+	                            const working = selectedScheduleRow[slotIdx] !== false;
+	                            return (
+	                              <button
+	                                key={slotIdx}
+	                                type="button"
+	                                disabled={readOnly}
+	                                onClick={()=>toggleSelectedScheduleSlot(slotIdx)}
+	                                style={{width:"100%",height:44,borderRadius:12,border:working?"1px solid rgba(100,255,218,0.2)":"1px solid rgba(255,255,255,0.08)",background:working?"rgba(100,255,218,0.08)":"repeating-linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 5px, rgba(255,255,255,0.06) 5px, rgba(255,255,255,0.06) 10px)",color:working?"#64ffda":"#6f7690",fontSize:10,fontWeight:800,cursor:readOnly?"default":"pointer",fontFamily:"inherit",padding:0}}
+	                              >
+	                                {working ? "✓" : "не раб"}
+	                              </button>
+	                            );
+	                          })}
+	                        </div>
+	                      ) : (
+	                        <div style={{padding:"12px 8px 4px",textAlign:"center",fontSize:11,color:"#7f92ba"}}>Выбери рабочие дни недели. Невыбранные дни считаются нерабочими.</div>
+	                      )}
+	                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <button onClick={()=>{if(canSave)onSave({...form, passport: serializePassportCard({ seriesNumber: form.passportSeriesNumber, issuedBy: form.passportIssuedBy, code: form.passportCode, issuedAt: form.passportIssuedAt }), workSchedule: normalizeWorkSchedule(form.workSchedule)});}} disabled={!canSave || saving} style={{padding:"12px 0",borderRadius:12,border:"none",background:(canSave && !saving)?"linear-gradient(135deg,#64ffda,#00bfa5)":"#333",color:(canSave && !saving)?"#0a0a23":"#666",fontWeight:800,fontSize:14,cursor:(canSave && !saving)?"pointer":"not-allowed",fontFamily:"inherit"}}>{saving ? "Сохраняю..." : (isNew ? "+ Добавить" : "Сохранить карточку")}</button>
           {readOnly && <div style={{fontSize:10,color:"#5a6a8a",textAlign:"center"}}>Редактирование карточки доступно только админу</div>}
         </div>
       </div>
@@ -1561,6 +1942,8 @@ const buildOrderFormState = (data, fixedSlot, defaultStatus = "Новый") => {
     city:fixedSlot?.city||"",
     district:"",
     address:"",
+    apartment:"",
+    floor:"",
     workOrder:"",
     comment:"",
     workDone:"",
@@ -1597,6 +1980,11 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
   const [showCityMap, setShowCityMap] = useState(false);
   const [slotMapOrder, setSlotMapOrder] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingServiceId, setPendingServiceId] = useState("");
+  const [saveAttempted, setSaveAttempted] = useState(false);
+  const [preferredDurationSlots, setPreferredDurationSlots] = useState(() => Math.max(1, Number(buildOrderFormState(maskTechnicianOrder(formSeed, currentUser), fixedSlot, preferredStatus).durationSlots || NEW_ORDER_DURATION_SLOTS)));
+  const [slotSelectionWarning, setSlotSelectionWarning] = useState("");
   const datePopoverRef = useRef(null);
   const dateButtonRef = useRef(null);
   const serviceIndex = useMemo(() => buildServiceIndex(services || []), [services]);
@@ -1609,6 +1997,13 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
   ), [f.serviceSubcategoryId, serviceIndex]);
   const directionOptions = useMemo(() => directions.map((node) => ({ value:node.id, label:node.name })), [directions]);
   const subcategoryOptions = useMemo(() => subcategories.map((node) => ({ value:node.id, label:node.name })), [subcategories]);
+  const normalizedServiceItems = useMemo(() => normalizeServiceItems(f.serviceItems || [], serviceIndex), [f.serviceItems, serviceIndex]);
+  const selectedServiceIds = useMemo(() => new Set(normalizedServiceItems.map((item) => item.serviceId)), [normalizedServiceItems]);
+  const remainingServiceOptions = useMemo(() => (
+    availableServices
+      .filter((serviceNode) => !selectedServiceIds.has(serviceNode.id))
+      .map((serviceNode) => ({ value: serviceNode.id, label: `${serviceNode.name} · ${serviceNode.price || 0} ₽` }))
+  ), [availableServices, selectedServiceIds]);
   const upd=(k,v)=>setF(p=>({...p,[k]:v}));
   useEffect(()=>{const h=e=>{if(e.key==="Escape")onClose();};document.addEventListener("keydown",h);return()=>document.removeEventListener("keydown",h);},[onClose]);
   useEffect(() => {
@@ -1632,7 +2027,16 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
     setSavePending(false);
     setDeletePending(false);
     setShowDatePicker(false);
+    setPendingServiceId("");
+    setSaveAttempted(false);
+    setPreferredDurationSlots(Math.max(1, Number(nextState.durationSlots || NEW_ORDER_DURATION_SLOTS)));
+    setSlotSelectionWarning("");
   },[currentRole, fixedSlot, formSeed, preferredStatus, serviceIndex]);
+  useEffect(() => {
+    if (!slotSelectionWarning) return undefined;
+    const timerId = window.setTimeout(() => setSlotSelectionWarning(""), 2200);
+    return () => window.clearTimeout(timerId);
+  }, [slotSelectionWarning]);
   useEffect(() => {
     if (!showDatePicker) return undefined;
     const closeOnOutside = (event) => {
@@ -1723,6 +2127,10 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
   }, [f.serviceSubcategoryId, subcategories]);
 
   useEffect(() => {
+    setPendingServiceId("");
+  }, [f.serviceDirectionId, f.serviceSubcategoryId]);
+
+  useEffect(() => {
     if (!f.master) return;
     if (cityMasters.some((employee) => employee.name === f.master)) return;
     setF((prev) => ({ ...prev, master: "", timeIdx: "", durationSlots: NEW_ORDER_DURATION_SLOTS }));
@@ -1792,19 +2200,35 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
     selectSubcategory(subcategoryNode);
   };
 
-  const toggleServiceItem = (serviceNode) => {
+  const addServiceItem = (serviceId) => {
     if (readOnly) return;
+    const serviceNode = serviceIndex.byId.get(serviceId);
+    if (!serviceNode) return;
+    setPendingServiceId("");
     setF((prev) => {
       const exists = (prev.serviceItems || []).some((item) => item.serviceId === serviceNode.id);
-      const nextItems = exists
-        ? (prev.serviceItems || []).filter((item) => item.serviceId !== serviceNode.id)
-        : [...normalizeServiceItems(prev.serviceItems || [], serviceIndex), {
-          serviceId: serviceNode.id,
-          name: serviceNode.name,
-          quantity: 1,
-          unitPrice: String(serviceNode.price || 0),
-          totalPrice: Number(serviceNode.price || 0),
-        }];
+      if (exists) return prev;
+      const nextItems = [...normalizeServiceItems(prev.serviceItems || [], serviceIndex), {
+        serviceId: serviceNode.id,
+        name: serviceNode.name,
+        quantity: 1,
+        unitPrice: String(serviceNode.price || 0),
+        totalPrice: Number(serviceNode.price || 0),
+      }];
+      const total = calculateServiceItemsTotal(nextItems);
+      return {
+        ...prev,
+        serviceItems: nextItems,
+        price: nextItems.length ? String(total) : "",
+        workOrder: nextItems.length ? summarizeServiceItems(nextItems) : "",
+      };
+    });
+  };
+
+  const removeServiceItem = (serviceId) => {
+    if (readOnly) return;
+    setF((prev) => {
+      const nextItems = (prev.serviceItems || []).filter((item) => item.serviceId !== serviceId);
       const total = calculateServiceItemsTotal(nextItems);
       return {
         ...prev,
@@ -1834,8 +2258,11 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
   };
   const freeSlots=useMemo(()=>{
     if(!f.city||!f.dateStr)return[];
+    const weekdayIdx = getDayIndexFromDateStr(f.dateStr);
     return cityMasters.map((m) => {
       const off = !!dayOffs[dok(f.city,m.name,f.dateStr)];
+      const scheduleActive = isScheduleActiveFromDate(m, f.dateStr);
+      const workSchedule = normalizeWorkSchedule(m.workSchedule);
       const rowOrders = Object.values(orders)
         .filter((order) => order.city === f.city && order.master === m.name && order.dateStr === f.dateStr && order._id !== data?._id);
       return {
@@ -1844,14 +2271,16 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
           const order = rowOrders.find((item) => orderCoversSlot(item, ti));
           const lock = slotLocks?.[lok(f.city,m.name,f.dateStr,ti)] || null;
           const ownLock = lock && lock.employeeId === lockOwnerId;
+          const working = !scheduleActive || weekdayIdx == null ? true : Boolean(workSchedule[String(weekdayIdx)]?.[ti] ?? true);
           return {
             ti,
             time:t,
-            free: !off && !order && !busySlots[bok(f.city,m.name,f.dateStr,ti)] && (!lock || ownLock),
+            free: working && !off && !order && !busySlots[bok(f.city,m.name,f.dateStr,ti)] && (!lock || ownLock),
             busy: !!busySlots[bok(f.city,m.name,f.dateStr,ti)],
             lock,
             ownLock,
             off,
+            notWorking: !working,
             order,
           };
         }),
@@ -1862,38 +2291,54 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
   const applySlotSelection = (masterName, slotIdx) => {
     if (readOnly) return;
     const masterRow = freeSlots.find((item) => item.master.name === masterName);
+    const duration = Math.max(1, Number((f.timeIdx === "" || f.timeIdx == null ? preferredDurationSlots : f.durationSlots) || 1));
+    const canPlaceFrom = (startIdx) => {
+      const endIdx = startIdx + duration - 1;
+      if (endIdx >= TIMES.length) return false;
+      return Array.from({ length: duration }, (_, idx) => startIdx + idx)
+        .every((idx) => masterRow?.slots?.[idx]?.free || currentRange.includes(idx));
+    };
+    if (slotIdx + duration - 1 >= TIMES.length) {
+      setSlotSelectionWarning(`Заявка занимает ${formatDurationLabel(duration)}. Выбери слот раньше.`);
+      return;
+    }
     if (f.master !== masterName || f.timeIdx === "" || f.timeIdx == null) {
-      setF((prev) => ({ ...prev, master: masterName, timeIdx: slotIdx, durationSlots: 1 }));
+      if (canPlaceFrom(slotIdx)) {
+        setPreferredDurationSlots(duration);
+        setSlotSelectionWarning("");
+        setF((prev) => ({ ...prev, master: masterName, timeIdx: slotIdx, durationSlots: duration }));
+        return;
+      }
+      setSlotSelectionWarning(`Для заявки нужно ${formatDurationLabel(duration)} подряд.`);
       return;
     }
     const start = Number(f.timeIdx);
-    const duration = Math.max(1, Number(f.durationSlots || 1));
     const end = start + duration - 1;
     if (slotIdx >= start && slotIdx <= end) {
-      if (duration === 1) {
-        setF((prev) => ({ ...prev, timeIdx: "", durationSlots: NEW_ORDER_DURATION_SLOTS }));
-        return;
-      }
-      if (slotIdx === start) {
-        setF((prev) => ({ ...prev, timeIdx: start + 1, durationSlots: duration - 1 }));
-        return;
-      }
-      if (slotIdx === end) {
-        setF((prev) => ({ ...prev, durationSlots: duration - 1 }));
-        return;
-      }
-      setF((prev) => ({ ...prev, durationSlots: (slotIdx - start) }));
+      setPreferredDurationSlots(duration);
+      setSlotSelectionWarning("");
+      setF((prev) => ({ ...prev, timeIdx: "", durationSlots: duration }));
       return;
     }
-    const nextStart = Math.min(start, slotIdx);
-    const nextEnd = Math.max(end, slotIdx);
-    const rangeIsFree = Array.from({ length: (nextEnd - nextStart) + 1 }, (_, idx) => nextStart + idx)
-      .every((idx) => masterRow?.slots?.[idx]?.free || currentRange.includes(idx));
-    if (!rangeIsFree) return;
-    setF((prev) => ({ ...prev, master: masterName, timeIdx: nextStart, durationSlots: (nextEnd - nextStart) + 1 }));
+    if (canPlaceFrom(slotIdx)) {
+      setPreferredDurationSlots(duration);
+      setSlotSelectionWarning("");
+      setF((prev) => ({ ...prev, master: masterName, timeIdx: slotIdx, durationSlots: duration }));
+      return;
+    }
+    setSlotSelectionWarning(`Для заявки нужно ${formatDurationLabel(duration)} подряд.`);
   };
 
-  const canSave = !savePending && !!f.master && f.timeIdx!=="" && !!f.dateStr && !!f.city && !!f.serviceDirectionId && !!f.serviceSubcategoryId && Number(f.durationSlots) > 0;
+  const requiredOrderErrors = useMemo(() => ({
+    phone: normalizePhoneDigits(f.phone).length < 10,
+    name: !String(f.name || "").trim(),
+    city: !String(f.city || "").trim(),
+    address: !String(f.address || "").trim(),
+    date: !String(f.dateStr || "").trim(),
+    source: !String(f.source || "").trim(),
+  }), [f.address, f.city, f.dateStr, f.name, f.phone, f.source]);
+  const hasRequiredOrderErrors = Object.values(requiredOrderErrors).some(Boolean);
+  const canSave = !savePending && !hasRequiredOrderErrors && !!f.master && f.timeIdx!=="" && !!f.dateStr && !!f.city && !!f.serviceDirectionId && !!f.serviceSubcategoryId && Number(f.durationSlots) > 0;
   const scheduleChanged = useMemo(() => {
     if (!originalPlacement) return false;
     return (
@@ -1915,7 +2360,9 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
     };
   }, [data?._createdAt, data?.status, f.status, historyEntries, preferredStatus]);
   const save=async ()=>{
-    if(readOnly||!canSave)return;
+    if(readOnly)return;
+    setSaveAttempted(true);
+    if(!canSave)return;
     setSavePending(true);
     try{
       await onSave(ck(f.city,f.master,f.dateStr,f.timeIdx),{...f,timeIdx:Number(f.timeIdx),durationSlots:Math.max(1, Number(f.durationSlots || 1))});
@@ -1925,6 +2372,7 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
   };
   const remove=async ()=>{
     if(readOnly||!allowDelete||!onDelete||deletePending||savePending)return;
+    setShowDeleteConfirm(false);
     setDeletePending(true);
     try{
       await onDelete();
@@ -1959,17 +2407,21 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
                   <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1}}>Телефон клиента</div>
                   {!isNew && <div style={{fontSize:8,color:"#8892b0",textTransform:"uppercase",letterSpacing:0.8,fontWeight:700,whiteSpace:"nowrap"}}>{statusHistoryMeta.status} · {timeAgoRu(statusHistoryMeta.changedAt)}</div>}
                 </div>
-                <PhoneInput disabled={readOnly} value={f.phone} onChange={v=>upd("phone",v)} />
+                <PhoneInput disabled={readOnly} value={f.phone} onChange={v=>upd("phone",v)} hasError={saveAttempted && requiredOrderErrors.phone} />
               </div>
-              <Fld label="Имя клиента" disabled={readOnly} value={f.name} onChange={v=>upd("name",v)} placeholder="Имя Фамилия" />
-              <div><div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Город</div>
-                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{Object.keys(cities).map(c=>(<button key={c} disabled={readOnly} onClick={()=>setF((prev)=>({...prev,city:c,master:"",timeIdx:"",durationSlots:NEW_ORDER_DURATION_SLOTS}))} style={{padding:"5px 11px",borderRadius:8,fontSize:11,cursor:readOnly?"not-allowed":"pointer",fontFamily:"inherit",border:f.city===c?`2px solid ${cities[c].color}`:"1px solid rgba(255,255,255,0.1)",background:f.city===c?cities[c].color+"22":"rgba(255,255,255,0.04)",color:f.city===c?"#fff":"#8892b0",fontWeight:f.city===c?700:400}}>{c}</button>))}</div></div>
+              <Fld label="Имя клиента" disabled={readOnly} value={f.name} onChange={v=>upd("name",v)} placeholder="Имя Фамилия" hasError={saveAttempted && requiredOrderErrors.name} />
+              <div><div style={{fontSize:10,color:saveAttempted && requiredOrderErrors.city?"#ff8f9a":"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Город</div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap",padding:saveAttempted && requiredOrderErrors.city?6:0,borderRadius:10,border:saveAttempted && requiredOrderErrors.city?"1px solid rgba(255,107,107,0.45)":"none",background:saveAttempted && requiredOrderErrors.city?"rgba(255,107,107,0.06)":"transparent"}}>{Object.keys(cities).map(c=>(<button key={c} disabled={readOnly} onClick={()=>setF((prev)=>({...prev,city:c,master:"",timeIdx:"",durationSlots:NEW_ORDER_DURATION_SLOTS}))} style={{padding:"5px 11px",borderRadius:8,fontSize:11,cursor:readOnly?"not-allowed":"pointer",fontFamily:"inherit",border:f.city===c?`2px solid ${cities[c].color}`:saveAttempted && requiredOrderErrors.city?"1px solid rgba(255,107,107,0.22)":"1px solid rgba(255,255,255,0.1)",background:f.city===c?cities[c].color+"22":saveAttempted && requiredOrderErrors.city?"rgba(255,107,107,0.06)":"rgba(255,255,255,0.04)",color:f.city===c?"#fff":saveAttempted && requiredOrderErrors.city?"#ffb0b9":"#8892b0",fontWeight:f.city===c?700:400}}>{c}</button>))}</div></div>
               <Fld label="Район" disabled={readOnly} value={f.district} onChange={v=>upd("district",v)} placeholder="Район" />
-              <div><div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Адрес</div><AddressInput disabled={readOnly} value={f.address} onChange={v=>upd("address",v)} onDistrictChange={v=>upd("district",v)} onCoordsChange={({lat,lng})=>setF(p=>({...p,lat,lng}))} city={f.city} cities={cities} initialCoords={f.lat&&f.lng?{lat:Number(f.lat),lon:Number(f.lng)}:null} /></div>
+              <div><div style={{fontSize:10,color:saveAttempted && requiredOrderErrors.address?"#ff8f9a":"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Адрес</div><AddressInput disabled={readOnly} hasError={saveAttempted && requiredOrderErrors.address} value={f.address} onChange={v=>upd("address",v)} onDistrictChange={v=>upd("district",v)} onCoordsChange={({lat,lng})=>setF(p=>({...p,lat,lng}))} city={f.city} cities={cities} initialCoords={f.lat&&f.lng?{lat:Number(f.lat),lon:Number(f.lng)}:null} /></div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <Fld label="" disabled={readOnly} value={f.apartment} onChange={v=>upd("apartment", v.replace(/[^\dA-Za-zА-Яа-я\-]/g,""))} placeholder="кв." />
+                <Fld label="" disabled={readOnly} value={f.floor} onChange={v=>upd("floor", v.replace(/[^\d\-]/g,""))} placeholder="этаж" />
+              </div>
               <div>
-                <div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Дата</div>
+                <div style={{fontSize:10,color:saveAttempted && requiredOrderErrors.date?"#ff8f9a":"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Дата</div>
                 <div style={{position:"relative"}}>
-                  <button ref={dateButtonRef} type="button" disabled={readOnly} onClick={openDatePicker} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"14px 16px",color:f.dateStr?"#e6f1ff":"#7f8ca8",fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",textAlign:"left",cursor:readOnly?"not-allowed":"pointer"}}>
+                  <button ref={dateButtonRef} type="button" disabled={readOnly} onClick={openDatePicker} style={{width:"100%",background:saveAttempted && requiredOrderErrors.date?"rgba(255,107,107,0.09)":"rgba(255,255,255,0.06)",border:saveAttempted && requiredOrderErrors.date?"1px solid rgba(255,107,107,0.52)":"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"14px 16px",color:f.dateStr?"#e6f1ff":"#7f8ca8",fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",textAlign:"left",cursor:readOnly?"not-allowed":"pointer",boxShadow:saveAttempted && requiredOrderErrors.date?"0 0 0 1px rgba(255,107,107,0.08) inset":"none"}}>
                     {f.dateStr ? fromDateInputValue(f.dateStr) : "выбрать дату"}
                   </button>
                   {showDatePicker && !readOnly && (
@@ -1986,6 +2438,7 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
                   )}
                 </div>
               </div>
+              <SourceSelect disabled={readOnly} hasError={saveAttempted && requiredOrderErrors.source} value={f.source} onChange={v=>upd("source",v)} sources={sources} onAdd={onAddSource} />
             </div>
 
             <div style={{padding:"14px",borderRadius:14,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",gap:10}}>
@@ -1995,9 +2448,6 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
               <Fld label="💰 Стоимость (₽)" disabled={readOnly} value={f.price} onChange={v=>upd("price",v.replace(/[^\d]/g,""))} type="text" inputMode="numeric" name="estimated-cost" suppressAutofillIcon placeholder="Предварительная оценка" />
               {!!(f.serviceItems || []).length && <div style={{fontSize:10,color:"#64ffda"}}>Стоимость заполняется из выбранных услуг и их количества.</div>}
               <Fld label="💳 Окончательная стоимость (₽)" disabled={readOnly} value={f.finalPrice} onChange={v=>upd("finalPrice",v.replace(/[^\d]/g,""))} type="text" inputMode="numeric" name="final-cost" suppressAutofillIcon placeholder="Сколько получено по факту" />
-              <SourceSelect disabled={readOnly} value={f.source} onChange={v=>upd("source",v)} sources={sources} onAdd={onAddSource} />
-              <div><div style={{fontSize:10,color:"#8892b0",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Статус</div>
-                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{(statuses || []).map((statusItem)=>{const meta=statusMeta(statusItem.name, statusMap);const statusAllowed=canUserSelectOrderStatus(currentUser,statusItem.name);const disabled=readOnly||!statusAllowed;return(<button key={statusItem.name} disabled={disabled} onClick={()=>upd("status",statusItem.name)} style={{padding:"5px 10px",borderRadius:999,fontSize:10,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",border:f.status===statusItem.name?`1px solid ${meta.pillBorder}`:"1px solid rgba(255,255,255,0.1)",background:f.status===statusItem.name?meta.pillBg:(disabled?"rgba(255,255,255,0.03)":"rgba(255,255,255,0.04)"),color:f.status===statusItem.name?meta.pillText:(disabled?"#637292":"#8892b0"),fontWeight:f.status===statusItem.name?800:400,opacity:disabled&&f.status!==statusItem.name?0.6:1}}>{statusItem.name}</button>);})}</div></div>
             </div>
           </div>
 
@@ -2018,32 +2468,43 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
                     <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1}}>Состав работ</div>
                     <div style={{fontSize:11,color:"#64ffda",fontWeight:800}}>{serviceItemsTotal ? `${serviceItemsTotal} ₽` : "0 ₽"}</div>
                   </div>
-                  {availableServices.length ? availableServices.map((serviceNode) => {
-                    const selectedItem = (f.serviceItems || []).find((item) => item.serviceId === serviceNode.id);
-                    const selected = Boolean(selectedItem);
+                  {normalizedServiceItems.length ? normalizedServiceItems.map((selectedItem) => {
+                    const serviceNode = serviceIndex.byId.get(selectedItem.serviceId) || { id: selectedItem.serviceId, name: selectedItem.name, price: selectedItem.unitPrice };
                     return (
-                      <div key={serviceNode.id} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"center",padding:"10px 12px",borderRadius:10,background:selected?"rgba(100,255,218,0.08)":"rgba(255,255,255,0.03)",border:selected?"1px solid rgba(100,255,218,0.22)":"1px solid rgba(255,255,255,0.06)"}}>
-                        <button type="button" disabled={readOnly} onClick={()=>toggleServiceItem(serviceNode)} style={{display:"flex",alignItems:"center",gap:10,background:"transparent",border:"none",padding:0,color:"inherit",cursor:readOnly?"not-allowed":"pointer",fontFamily:"inherit",textAlign:"left"}}>
-                          <span style={{width:18,height:18,borderRadius:5,border:selected?"2px solid #64ffda":"1px solid rgba(255,255,255,0.18)",background:selected?"rgba(100,255,218,0.2)":"transparent",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64ffda",fontSize:11,fontWeight:900,flexShrink:0}}>{selected ? "✓" : ""}</span>
+                      <div key={serviceNode.id} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"center",padding:"10px 12px",borderRadius:10,background:"rgba(100,255,218,0.08)",border:"1px solid rgba(100,255,218,0.22)"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,color:"inherit",fontFamily:"inherit",textAlign:"left"}}>
+                          <span style={{width:18,height:18,borderRadius:5,border:"2px solid #64ffda",background:"rgba(100,255,218,0.2)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64ffda",fontSize:11,fontWeight:900,flexShrink:0}}>✓</span>
                           <span>
                             <div style={{fontSize:12,color:"#e6f1ff",fontWeight:700}}>{serviceNode.name}</div>
                             <div style={{fontSize:10,color:"#8fa1ca"}}>{serviceNode.price || 0} ₽ за единицу</div>
                           </span>
-                        </button>
-                        {selected ? (
-                          <div style={{display:"flex",alignItems:"center",gap:8}}>
-                            <div style={{display:"inline-flex",alignItems:"center",borderRadius:9,overflow:"hidden",border:"1px solid rgba(255,255,255,0.1)"}}>
-                              <button type="button" disabled={readOnly} onClick={()=>updateServiceQuantity(serviceNode.id,-1)} style={{width:30,height:30,border:"none",background:"rgba(255,255,255,0.05)",color:"#dbe4ff",cursor:readOnly?"not-allowed":"pointer",fontSize:16,fontFamily:"inherit"}}>-</button>
-                              <div style={{minWidth:34,textAlign:"center",fontSize:12,color:"#fff",fontWeight:800}}>{selectedItem.quantity}</div>
-                              <button type="button" disabled={readOnly} onClick={()=>updateServiceQuantity(serviceNode.id,1)} style={{width:30,height:30,border:"none",background:"rgba(255,255,255,0.05)",color:"#dbe4ff",cursor:readOnly?"not-allowed":"pointer",fontSize:16,fontFamily:"inherit"}}>+</button>
-                            </div>
-                            <div style={{fontSize:11,color:"#64ffda",fontWeight:800,minWidth:66,textAlign:"right"}}>{selectedItem.totalPrice} ₽</div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <div style={{display:"inline-flex",alignItems:"center",borderRadius:9,overflow:"hidden",border:"1px solid rgba(255,255,255,0.1)"}}>
+                            <button type="button" disabled={readOnly} onClick={()=>updateServiceQuantity(serviceNode.id,-1)} style={{width:30,height:30,border:"none",background:"rgba(255,255,255,0.05)",color:"#dbe4ff",cursor:readOnly?"not-allowed":"pointer",fontSize:16,fontFamily:"inherit"}}>-</button>
+                            <div style={{minWidth:34,textAlign:"center",fontSize:12,color:"#fff",fontWeight:800}}>{selectedItem.quantity}</div>
+                            <button type="button" disabled={readOnly} onClick={()=>updateServiceQuantity(serviceNode.id,1)} style={{width:30,height:30,border:"none",background:"rgba(255,255,255,0.05)",color:"#dbe4ff",cursor:readOnly?"not-allowed":"pointer",fontSize:16,fontFamily:"inherit"}}>+</button>
                           </div>
-                        ) : <div style={{fontSize:10,color:"#6f7f9f"}}>не выбрано</div>}
+                          <div style={{fontSize:11,color:"#64ffda",fontWeight:800,minWidth:66,textAlign:"right"}}>{selectedItem.totalPrice} ₽</div>
+                          <button type="button" disabled={readOnly} onClick={()=>removeServiceItem(serviceNode.id)} style={{width:30,height:30,borderRadius:9,border:"1px solid rgba(255,82,82,0.25)",background:"rgba(255,82,82,0.12)",color:"#ff9ea1",fontSize:15,cursor:readOnly?"not-allowed":"pointer",fontFamily:"inherit",flexShrink:0}}>×</button>
+                        </div>
                       </div>
                     );
-                  }) : <div style={{fontSize:11,color:"#7f92ba"}}>{f.serviceSubcategoryId ? "В этой подуслуге пока нет услуг." : "Выбери направление и подуслугу, и здесь появятся услуги."}</div>}
-                  {serviceSummary && <div style={{fontSize:10,color:"#8fa1ca",lineHeight:1.5}}>Собрано: {serviceSummary}</div>}
+                  }) : <div style={{fontSize:11,color:"#7f92ba"}}>{f.serviceSubcategoryId ? "Выбери услугу, и она появится в составе работ." : "Выбери направление и подуслугу, затем добавь нужные услуги."}</div>}
+                  <PickerField
+                    label=""
+                    disabled={readOnly || !f.serviceSubcategoryId || !remainingServiceOptions.length}
+                    value={pendingServiceId}
+                    onChange={(value)=>{ setPendingServiceId(value); addServiceItem(value); }}
+                    options={remainingServiceOptions}
+                    placeholder={
+                      !f.serviceSubcategoryId
+                        ? "Сначала выбери подуслугу"
+                        : remainingServiceOptions.length
+                          ? "Выбери услугу"
+                          : "Все услуги уже добавлены"
+                    }
+                  />
                 </div>
               </div>
               {(!f.serviceDirectionId || !f.serviceSubcategoryId) && <div style={{fontSize:11,color:"#7f92ba"}}>Сначала выбери направление и подуслугу. Пока они не выбраны, мастера и свободные часы скрыты.</div>}
@@ -2062,15 +2523,22 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
                       <td style={{padding:"8px 8px",color:"#ccd6f6",fontWeight:600,whiteSpace:"nowrap",position:"sticky",left:0,background:"#1a1a2e",width:"14%",minWidth:76,maxWidth:84,fontSize:10,overflow:"hidden",textOverflow:"ellipsis"}}><span style={{display:"inline-block",width:8,height:8,borderRadius:5,background:m.color,marginRight:6}} />{m.name}</td>
                       {slots.map(s=>(<td key={s.ti} style={{padding:2,textAlign:"center"}}>
                         {s.off?<div style={{padding:"8px 4px",borderRadius:6,background:"rgba(255,255,255,0.03)",color:"#555",fontSize:9,minWidth:48}}>вых</div>
+                        :s.order?<div onClick={()=>{if(s.order && (s.order.address || (s.order.lat && s.order.lng))) setSlotMapOrder(s.order);}} style={{padding:"8px 4px",borderRadius:6,background:s.busy?"rgba(255,193,7,0.12)":"rgba(255,82,82,0.1)",color:s.busy?"#ffd166":"#ef5350",fontSize:9,minWidth:48,cursor:(s.order?.address||s.order?.lat)?"pointer":"default"}}>{s.busy?"занят":"занят"}</div>
+                        :s.notWorking?<div style={{padding:"8px 4px",borderRadius:6,background:"repeating-linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 5px, rgba(255,255,255,0.06) 5px, rgba(255,255,255,0.06) 10px)",border:"1px solid rgba(255,255,255,0.08)",color:"#6c748f",fontSize:8.5,minWidth:48,fontWeight:700}}>не раб</div>
                         :s.free|| (f.master===m.name && currentRange.includes(s.ti)) ?<div onClick={()=>applySlotSelection(m.name,s.ti)} style={{padding:"8px 4px",borderRadius:6,background:f.master===m.name&&currentRange.includes(s.ti)?"rgba(100,255,218,0.3)":"rgba(100,255,218,0.06)",border:f.master===m.name&&currentRange.includes(s.ti)?"2px solid #64ffda":"1px solid rgba(100,255,218,0.15)",color:"#64ffda",cursor:readOnly?"default":"pointer",fontWeight:f.master===m.name&&currentRange.includes(s.ti)?800:500,fontSize:11,minWidth:48}}>{f.master===m.name&&currentRange.includes(s.ti)?"✓":"✓"}</div>
                         :s.lock && !s.ownLock ?<div style={{padding:"5px 4px",borderRadius:6,background:"rgba(255,82,82,0.12)",border:"1px solid rgba(255,82,82,0.4)",color:"#ff6f7d",fontSize:8,minWidth:48,lineHeight:1.2}}><div style={{fontWeight:800}}>оформ.</div><div style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.lock.employeeName || "Сотр."}</div></div>
-                        :<div onClick={()=>{if(s.order && (s.order.address || (s.order.lat && s.order.lng))) setSlotMapOrder(s.order);}} style={{padding:"8px 4px",borderRadius:6,background:s.busy?"rgba(255,193,7,0.12)":"rgba(255,82,82,0.1)",color:s.busy?"#ffd166":"#ef5350",fontSize:9,minWidth:48,cursor:(s.order?.address||s.order?.lat)?"pointer":"default"}}>{s.busy?"занят":"занят"}</div>}
+                        :<div style={{padding:"8px 4px",borderRadius:6,background:s.busy?"rgba(255,193,7,0.12)":"rgba(255,82,82,0.1)",color:s.busy?"#ffd166":"#ef5350",fontSize:9,minWidth:48}}>{s.busy?"занят":"занят"}</div>}
                       </td>))}
                     </tr>))}
                   </tbody></table></div>
                 {f.master&&f.timeIdx!==""&&<div style={{marginTop:6,fontSize:11,color:"#64ffda",fontWeight:600}}>✓ {f.master} · {formatSelectedRange(f.timeIdx, f.durationSlots)} · {formatDurationLabel(f.durationSlots)}</div>}
+                {!!slotSelectionWarning && <div style={{marginTop:6,fontSize:11,color:"#ffb35a",fontWeight:600}}>{slotSelectionWarning}</div>}
               </div>)}
               {(f.serviceDirectionId&&f.serviceSubcategoryId&&(!f.city || !f.dateStr)) && <div style={{fontSize:11,color:"#7f92ba"}}>Выбери город и дату, чтобы увидеть доступные окна.</div>}
+              <div style={{padding:"12px",borderRadius:12,background:"rgba(7,12,34,0.45)",border:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1}}>Статус</div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{(statuses || []).map((statusItem)=>{const meta=statusMeta(statusItem.name, statusMap);const statusAllowed=canUserSelectOrderStatus(currentUser,statusItem.name);const disabled=readOnly||!statusAllowed;return(<button key={statusItem.name} disabled={disabled} onClick={()=>upd("status",statusItem.name)} style={{padding:"5px 10px",borderRadius:999,fontSize:10,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",border:f.status===statusItem.name?`1px solid ${meta.pillBorder}`:"1px solid rgba(255,255,255,0.1)",background:f.status===statusItem.name?meta.pillBg:(disabled?"rgba(255,255,255,0.03)":"rgba(255,255,255,0.04)"),color:f.status===statusItem.name?meta.pillText:(disabled?"#637292":"#8892b0"),fontWeight:f.status===statusItem.name?800:400,opacity:disabled&&f.status!==statusItem.name?0.6:1}}>{statusItem.name}</button>);})}</div>
+              </div>
             </div>
 
             {!!originalPlacement && (
@@ -2086,27 +2554,30 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
 
             {f.name&&f.phone&&(<div style={{background:"rgba(100,255,218,0.06)",border:"1px solid rgba(100,255,218,0.15)",borderRadius:10,padding:10}}>
               <div style={{fontSize:9,color:"#64ffda",marginBottom:4,fontWeight:700,letterSpacing:1}}>СООБЩЕНИЕ МАСТЕРУ</div>
-              <div style={{fontSize:10,color:"#ccd6f6",lineHeight:1.6,fontFamily:"monospace",whiteSpace:"pre-line"}}>{`📞 ${f.name} +7${fmtPh(f.phone)}\n📍 ${f.city}, ${f.address}${f.district?`, ${f.district}`:""}\n📁 ${f.serviceDirectionName||"—"} / ${f.serviceSubcategoryName||"—"}\n🔧 ${f.workOrder||"—"}\n💬 ${f.comment||"—"}\n💰 ${f.price?f.price+"₽":"—"}\n📊 ${f.status}`}</div>
+              <div style={{fontSize:10,color:"#ccd6f6",lineHeight:1.6,fontFamily:"monospace",whiteSpace:"pre-line"}}>{`📞 ${f.name} +7${fmtPh(f.phone)}\n📍 ${f.city}, ${formatOrderAddressLine(f.address, f.apartment, f.floor)}${f.district?`, ${f.district}`:""}\n📁 ${f.serviceDirectionName||"—"} / ${f.serviceSubcategoryName||"—"}\n🔧 ${f.workOrder||"—"}\n💬 ${f.comment||"—"}\n💰 ${f.price?f.price+"₽":"—"}\n📊 ${f.status}`}</div>
             </div>)}
 
             <div style={{display:"flex",gap:8,marginTop:"auto",paddingTop:4}}>
-              {!readOnly&&<button onClick={save} disabled={!canSave} style={{flex:1,padding:"12px 0",borderRadius:12,border:"none",background:canSave?"linear-gradient(135deg,#64ffda,#00bfa5)":"#333",color:canSave?"#0a0a23":"#666",fontWeight:800,fontSize:14,cursor:canSave?"pointer":"not-allowed",fontFamily:"inherit"}}>{savePending?"⏳ Сохраняю...":"💾 Сохранить"}</button>}
+              {!readOnly&&<button onClick={save} disabled={savePending} style={{flex:1,padding:"12px 0",borderRadius:12,border:"none",background:canSave?"linear-gradient(135deg,#64ffda,#00bfa5)":"#333",color:canSave?"#0a0a23":"#8f9bb9",fontWeight:800,fontSize:14,cursor:savePending?"not-allowed":"pointer",fontFamily:"inherit"}}>{savePending?"⏳ Сохраняю...":"💾 Сохранить"}</button>}
               {readOnly&&<div style={{flex:1,padding:"12px 0",borderRadius:12,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.04)",color:"#7d88aa",fontWeight:700,fontSize:12,textAlign:"center"}}>Только просмотр</div>}
-              {data&&allowDelete&&<button onClick={remove} disabled={deletePending||savePending} style={{padding:"12px 16px",borderRadius:12,border:"1px solid rgba(255,82,82,0.3)",background:(deletePending||savePending)?"rgba(255,255,255,0.06)":"rgba(255,82,82,0.1)",color:(deletePending||savePending)?"#66739b":"#ff5252",fontWeight:700,fontSize:13,cursor:(deletePending||savePending)?"not-allowed":"pointer",fontFamily:"inherit"}}>{deletePending?"⏳":"🗑"}</button>}
+              {data&&allowDelete&&<button onClick={()=>setShowDeleteConfirm(true)} disabled={deletePending||savePending} style={{padding:"12px 16px",borderRadius:12,border:"1px solid rgba(255,82,82,0.3)",background:(deletePending||savePending)?"rgba(255,255,255,0.06)":"rgba(255,82,82,0.1)",color:(deletePending||savePending)?"#66739b":"#ff5252",fontWeight:700,fontSize:13,cursor:(deletePending||savePending)?"not-allowed":"pointer",fontFamily:"inherit"}}>{deletePending?"⏳":"🗑"}</button>}
             </div>
           </div>
         </div>
       </div>
+      {showDeleteConfirm && <ConfirmDialog title="Удалить заявку?" onConfirm={remove} onCancel={()=>setShowDeleteConfirm(false)} />}
       {showHistory&&<OrderHistoryPopup entries={historyEntries} onClose={()=>setShowHistory(false)} />}
       {showCityMap && (() => {
         const masterColorMap = {};
         const cityTechs = employees.filter(e => e.type === "technician" && e.city === f.city);
         cityTechs.forEach(e => { masterColorMap[e.name] = e.color; });
         const cityOrders = Object.values(orders).filter(o => o.city === f.city && o.dateStr === f.dateStr && (o.address || (o.lat && o.lng)));
+        const orderKey = (o) => `${o.city}|${o.master}|${o.dateStr}|${o.timeIdx}`;
         const mapPins = cityOrders.map((o, i) => ({
+          id: orderKey(o),
           lat: o.lat ? Number(o.lat) : 0, lon: o.lng ? Number(o.lng) : 0,
           pinColor: hexToPinColor(masterColorMap[o.master] || "#999", i),
-          label: `${o.master} · ${slotLabel(o.timeIdx)}–${getOrderEndLabel(o)} · ${o.name || "Клиент"}`,
+          label: `${o.master} · ${slotLabel(o.timeIdx)}–${getOrderEndLabel(o)}`,
           address: o.address || "",
           city: f.city,
           legend: o.master,
@@ -2123,8 +2594,21 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
         }));
         const cityData = cities[f.city];
         const cc = cityData ? { lat: cityData.lat, lon: cityData.lng } : null;
-        const newOrderCoords = f.lat && f.lng ? { lat: Number(f.lat), lon: Number(f.lng), pinColor: "rd", label: "Новая заявка · " + (f.name || "Клиент"), address: f.address || "", highlight: true, legend: "Новая заявка", legendColor: "#ff5252" } : null;
-        return <MultiPinMapModal pins={mapPins} homePins={homePins} highlightPin={newOrderCoords} cityCenter={cc} title={`🗺 Заказы · ${f.city} · ${f.dateStr ? formatShortDate(f.dateStr) : ""}`} onClose={() => setShowCityMap(false)} />;
+        const newOrderCoords = isNew && f.lat && f.lng ? { lat: Number(f.lat), lon: Number(f.lng), pinColor: "rd", label: "Новая заявка", address: f.address || "", highlight: true, legend: "Новая заявка", legendColor: "#ff5252" } : null;
+        const currentOrderId = !isNew && data ? orderKey(data) : null;
+        const slotRows = freeSlots.map(({ master, slots }) => ({
+          master,
+          slots: slots.map((slot) => ({
+            ti: slot.ti,
+            off: slot.off,
+            notWorking: slot.notWorking,
+            free: slot.free,
+            selected: f.master === master.name && currentRange.includes(slot.ti),
+            clickable: !readOnly && !slot.notWorking && (slot.free || (f.master === master.name && currentRange.includes(slot.ti))),
+            pinId: slot.order ? orderKey(slot.order) : null,
+          })),
+        }));
+        return <MultiPinMapModal pins={mapPins} homePins={homePins} highlightPin={newOrderCoords} cityCenter={cc} selectedPinId={currentOrderId} slotRows={slotRows} onSlotSelect={applySlotSelection} title={`🗺 Заказы · ${f.city} · ${f.dateStr ? formatShortDate(f.dateStr) : ""}`} onClose={() => setShowCityMap(false)} />;
       })()}
       {slotMapOrder && (() => {
         const masterColorMap = {};
@@ -2133,7 +2617,7 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
         const existingPin = {
           lat: slotMapOrder.lat ? Number(slotMapOrder.lat) : 0, lon: slotMapOrder.lng ? Number(slotMapOrder.lng) : 0,
           pinColor: hexToPinColor(masterColorMap[slotMapOrder.master] || "#999", 0),
-          label: `${slotMapOrder.master} · ${slotLabel(slotMapOrder.timeIdx)}–${getOrderEndLabel(slotMapOrder)} · ${slotMapOrder.name || "Клиент"}`,
+          label: `${slotMapOrder.master} · ${slotLabel(slotMapOrder.timeIdx)}–${getOrderEndLabel(slotMapOrder)}`,
           address: slotMapOrder.address || "",
           city: f.city,
           legend: slotMapOrder.master,
@@ -2150,7 +2634,7 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
         }));
         const cityData = cities[f.city];
         const cc = cityData ? { lat: cityData.lat, lon: cityData.lng } : null;
-        const newOrderCoords = f.lat && f.lng ? { lat: Number(f.lat), lon: Number(f.lng), pinColor: "rd", label: "Новая заявка · " + (f.name || "Клиент"), address: f.address || "", highlight: true, legend: "Новая заявка", legendColor: "#ff5252" } : null;
+        const newOrderCoords = isNew && f.lat && f.lng ? { lat: Number(f.lat), lon: Number(f.lng), pinColor: "rd", label: "Новая заявка", address: f.address || "", highlight: true, legend: "Новая заявка", legendColor: "#ff5252" } : null;
         return <MultiPinMapModal pins={[existingPin]} homePins={homePins} highlightPin={newOrderCoords} cityCenter={cc} title={`📍 Заказ · ${slotMapOrder.master} · ${slotLabel(slotMapOrder.timeIdx)}`} onClose={() => setSlotMapOrder(null)} />;
       })()}
     </>
@@ -2252,11 +2736,13 @@ const TechnicianDashboard = ({ technician, orders, dayOffs, busySlots, onToggleB
   const nowSlot = Math.max(0, now.getHours() - WORKDAY_START_HOUR);
   const nearestToday = todayItems.find((order) => Number(order.timeIdx) + getOrderDurationSlots(order) > nowSlot) || todayItems[0] || null;
   const todayOff = !!dayOffs[dok(technician.city, technician.name, today)];
+  const todayWorkingSlots = new Set(TIMES.map((_, ti) => ti).filter((ti) => isEmployeeWorkingAt(technician, today, ti)));
   const todayBusySet = new Set(TIMES.map((_, ti) => ti).filter((ti) => !!busySlots[bok(technician.city, technician.name, today, ti)]));
   const todayOrderOccupied = new Set(todayItems.flatMap((order) => getOrderSlotIndices(order)));
-  const freeToday = todayOff ? 0 : Math.max(0, TIMES.length - todayOrderOccupied.size - todayBusySet.size);
+  const freeToday = todayOff ? 0 : Math.max(0, todayWorkingSlots.size - [...todayOrderOccupied].filter((slot) => todayWorkingSlots.has(slot)).length - [...todayBusySet].filter((slot) => todayWorkingSlots.has(slot)).length);
   const dayOrders = byDate[selectedDate] || [];
   const selectedOff = !!dayOffs[dok(technician.city, technician.name, selectedDate)];
+  const selectedWorkingSlots = useMemo(() => new Set(TIMES.map((_, ti) => ti).filter((ti) => isEmployeeWorkingAt(technician, selectedDate, ti))), [selectedDate, technician]);
   const selectedBusySet = useMemo(() => new Set(TIMES.map((_, ti) => ti).filter((ti) => !!busySlots[bok(technician.city, technician.name, selectedDate, ti)])), [busySlots, technician.city, technician.name, selectedDate]);
   const freeIntervals = useMemo(() => {
     if (selectedOff) return [];
@@ -2264,17 +2750,18 @@ const TechnicianDashboard = ({ technician, orders, dayOffs, busySlots, onToggleB
     const ranges = [];
     let start = null;
     for (let i = 0; i < TIMES.length; i += 1) {
-      if (!occupied.has(i) && start === null) start = i;
-      if ((occupied.has(i) || i === TIMES.length - 1) && start !== null) {
-        const end = occupied.has(i) ? i - 1 : i;
+      const unavailable = occupied.has(i) || !selectedWorkingSlots.has(i);
+      if (!unavailable && start === null) start = i;
+      if ((unavailable || i === TIMES.length - 1) && start !== null) {
+        const end = unavailable ? i - 1 : i;
         ranges.push(`${slotLabel(start)}–${slotLabel(end + 1)}`);
         start = null;
       }
     }
     return ranges;
-  }, [dayOrders, selectedBusySet, selectedOff]);
+  }, [dayOrders, selectedBusySet, selectedOff, selectedWorkingSlots]);
   const occupiedDaySlots = new Set(dayOrders.flatMap((order) => getOrderSlotIndices(order)));
-  const loadPercent = selectedOff ? 0 : Math.round((((occupiedDaySlots.size) + selectedBusySet.size) / TIMES.length) * 100);
+  const loadPercent = selectedOff || !selectedWorkingSlots.size ? 0 : Math.round((((occupiedDaySlots.size) + selectedBusySet.size) / selectedWorkingSlots.size) * 100);
   const mobileTimelineItems = useMemo(() => {
     const items = [];
     for (let idx = 0; idx < TIMES.length; idx += 1) {
@@ -2293,13 +2780,13 @@ const TechnicianDashboard = ({ technician, orders, dayOffs, busySlots, onToggleB
       if (dayOrders.some((order) => orderCoversSlot(order, idx))) continue;
       items.push({
         key: `slot-${idx}`,
-        kind: selectedBusySet.has(idx) ? "busy" : (selectedOff ? "off" : "free"),
+        kind: selectedOff ? "off" : (!selectedWorkingSlots.has(idx) ? "nonwork" : (selectedBusySet.has(idx) ? "busy" : "free")),
         idx,
         label: TIMES[idx],
       });
     }
     return items;
-  }, [dayOrders, selectedBusySet, selectedOff]);
+  }, [dayOrders, selectedBusySet, selectedOff, selectedWorkingSlots]);
 
   const renderDayButton = (date, compactOff = "выходн.") => {
     const ds = dstr(date);
@@ -2346,14 +2833,21 @@ const TechnicianDashboard = ({ technician, orders, dayOffs, busySlots, onToggleB
             <button key={value} onClick={() => setMode(value)} style={{ padding: "6px 10px", borderRadius: 8, border: mode === value ? "1px solid #64ffda" : "1px solid rgba(255,255,255,0.12)", background: mode === value ? "rgba(100,255,218,0.13)" : "rgba(255,255,255,0.03)", color: mode === value ? "#64ffda" : "#9fb1d1", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
           ))}
           {!isMobile && (
-            <select value={workFilter} onChange={(e) => setWorkFilter(e.target.value)} style={{ marginLeft: "auto", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "6px 8px", color: "#dce8ff", fontSize: 11, fontFamily: "inherit" }}>
-              <option value="all" style={{ background: "#1a1a2e" }}>Все работы</option>
-              <option value="clean" style={{ background: "#1a1a2e" }}>Чистка</option>
-              <option value="refill" style={{ background: "#1a1a2e" }}>Заправка</option>
-              <option value="diag" style={{ background: "#1a1a2e" }}>Диагностика</option>
-              <option value="repair" style={{ background: "#1a1a2e" }}>Ремонт</option>
-              <option value="replace" style={{ background: "#1a1a2e" }}>Замена деталей</option>
-            </select>
+            <CustomSelect
+              value={workFilter}
+              onChange={setWorkFilter}
+              options={[
+                { value: "all", label: "Все работы" },
+                { value: "clean", label: "Чистка" },
+                { value: "refill", label: "Заправка" },
+                { value: "diag", label: "Диагностика" },
+                { value: "repair", label: "Ремонт" },
+                { value: "replace", label: "Замена деталей" },
+              ]}
+              className="calendar-work-filter"
+              triggerStyle={{ marginLeft: "auto", minHeight: 30, borderRadius: 8, padding: "6px 30px 6px 8px", fontSize: 11, color: "#dce8ff", width: 150 }}
+              menuZIndex={1200}
+            />
           )}
         </div>
 
@@ -2361,12 +2855,20 @@ const TechnicianDashboard = ({ technician, orders, dayOffs, busySlots, onToggleB
         {mode === "month" && (
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 92px", gap: 8, marginBottom: 8 }}>
-              <select value={calMonth} onChange={(e) => setCalMonth(parseInt(e.target.value, 10))} style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "8px 10px", color: "#e6f1ff", fontSize: 12, fontFamily: "inherit", minHeight: 38 }}>
-                {MONTHS.map((monthName, idx) => <option key={monthName} value={idx} style={{ background: "#1a1a2e" }}>{monthName}</option>)}
-              </select>
-              <select value={calYear} onChange={(e) => setCalYear(parseInt(e.target.value, 10))} style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: "8px 10px", color: "#e6f1ff", fontSize: 12, fontFamily: "inherit", minHeight: 38 }}>
-                {Array.from({ length: 9 }, (_, idx) => new Date().getFullYear() - 2 + idx).map((yearValue) => <option key={yearValue} value={yearValue} style={{ background: "#1a1a2e" }}>{yearValue}</option>)}
-              </select>
+              <CustomSelect
+                value={calMonth}
+                onChange={(nextValue) => setCalMonth(parseInt(nextValue, 10))}
+                options={MONTHS.map((monthName, idx) => ({ value: idx, label: monthName }))}
+                triggerStyle={{ borderRadius: 10 }}
+                menuZIndex={1200}
+              />
+              <CustomSelect
+                value={calYear}
+                onChange={(nextValue) => setCalYear(parseInt(nextValue, 10))}
+                options={Array.from({ length: 9 }, (_, idx) => new Date().getFullYear() - 2 + idx).map((yearValue) => ({ value: yearValue, label: String(yearValue) }))}
+                triggerStyle={{ borderRadius: 10 }}
+                menuZIndex={1200}
+              />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>{monthDays.map((date) => renderDayButton(date, "вых"))}</div>
           </div>
@@ -2378,7 +2880,7 @@ const TechnicianDashboard = ({ technician, orders, dayOffs, busySlots, onToggleB
             <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginBottom: 8 }}>
               <div style={{ height: "100%", width: `${loadPercent}%`, background: loadPercent > 70 ? "#ff6b6b" : loadPercent > 40 ? "#ffd166" : "#64ffda" }} />
             </div>
-            <div style={{ fontSize: 11, color: "#a3b6d8" }}>{occupiedDaySlots.size + selectedBusySet.size} из {TIMES.length} слотов занято</div>
+            <div style={{ fontSize: 11, color: "#a3b6d8" }}>{occupiedDaySlots.size + selectedBusySet.size} из {selectedWorkingSlots.size || TIMES.length} слотов занято</div>
             <div style={{ fontSize: 11, color: "#a3b6d8", marginTop: 4 }}>Свободно: {selectedOff ? "выходной" : (freeIntervals.length ? freeIntervals.join(", ") : "нет окон")}</div>
           </div>
           <div style={{ borderRadius: 12, padding: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
@@ -2390,12 +2892,12 @@ const TechnicianDashboard = ({ technician, orders, dayOffs, busySlots, onToggleB
                 const busy = selectedBusySet.has(idx);
                 const isStart = order ? Number(order.timeIdx) === idx : false;
                 const timeLabel = item.kind === "order" ? item.label : item.label;
-                const stateLabel = selectedOff ? "вых" : order ? (isStart ? "заказ" : "прод.") : busy ? "занят" : "свободно";
+                const stateLabel = selectedOff ? "вых" : !selectedWorkingSlots.has(idx) ? "не раб" : order ? (isStart ? "заказ" : "прод.") : busy ? "занят" : "свободно";
                 return (
                   <button
                     key={item.key}
-                    onClick={() => { if (!order && !selectedOff) onToggleBusySlot(technician.city, technician.name, selectedDate, idx); }}
-                    style={{ borderRadius: 8, padding:"8px 6px", textAlign: "center", border: "1px solid rgba(255,255,255,0.1)", background: selectedOff ? "rgba(125,133,151,0.14)" : order ? "rgba(100,255,218,0.16)" : busy ? "rgba(255,193,7,0.16)" : "rgba(255,255,255,0.03)", cursor: (!order && !selectedOff) ? "pointer" : "default", fontFamily: "inherit", minHeight: 50 }}
+                    onClick={() => { if (!order && !selectedOff && selectedWorkingSlots.has(idx)) onToggleBusySlot(technician.city, technician.name, selectedDate, idx); }}
+                    style={{ borderRadius: 8, padding:"8px 6px", textAlign: "center", border: "1px solid rgba(255,255,255,0.1)", background: selectedOff ? "rgba(125,133,151,0.14)" : !selectedWorkingSlots.has(idx) ? "repeating-linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 5px, rgba(255,255,255,0.06) 5px, rgba(255,255,255,0.06) 10px)" : order ? "rgba(100,255,218,0.16)" : busy ? "rgba(255,193,7,0.16)" : "rgba(255,255,255,0.03)", cursor: (!order && !selectedOff && selectedWorkingSlots.has(idx)) ? "pointer" : "default", fontFamily: "inherit", minHeight: 50 }}
                   >
                     <div style={{ fontSize: item.kind === "order" ? 10.5 : 10, color: "#95a8d1", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{timeLabel}</div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: selectedOff ? "#7d8597" : order ? "#64ffda" : busy ? "#ffd166" : "#7f92ba", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{stateLabel}</div>
@@ -2515,30 +3017,25 @@ const TechnicianDashboard = ({ technician, orders, dayOffs, busySlots, onToggleB
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {(completeDraft.serviceItems || []).map((item, index) => (
                   <div key={item.id || index} style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 70px 94px 34px",gap:8,alignItems:"center"}}>
-                    <div style={{position:"relative"}}>
-                      <select
-                        disabled={item.officeLocked}
-                        value={item.serviceId || ""}
-                        onChange={(event) => {
-                          const nextService = (completeDraft.availableServices || []).find((serviceItem) => serviceItem.serviceId === event.target.value);
-                          setCompleteDraft((prev) => ({
-                            ...prev,
-                            serviceItems: prev.serviceItems.map((serviceItem, serviceIndex) => serviceIndex === index ? {
-                              ...serviceItem,
-                              serviceId: event.target.value,
-                              name: nextService?.name || "",
-                            } : serviceItem),
-                          }));
-                        }}
-                        style={{width:"100%",height:38,background:item.officeLocked?"rgba(255,255,255,0.04)":"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"0 34px 0 12px",color:item.officeLocked?"#9fb1d1":(item.serviceId ? "#e6f1ff" : "#8f9bb9"),fontSize:16,fontFamily:"inherit",outline:"none",boxSizing:"border-box",appearance:"none",WebkitAppearance:"none",MozAppearance:"none",cursor:item.officeLocked?"not-allowed":"pointer"}}
-                      >
-                        <option value="">{completeDraft.availableServices?.length ? "Выбери услугу" : "Нет услуг в подуслуге"}</option>
-                        {(completeDraft.availableServices || []).map((serviceOption) => (
-                          <option key={serviceOption.serviceId} value={serviceOption.serviceId}>{serviceOption.name}</option>
-                        ))}
-                      </select>
-                      <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#8fa1ca",fontSize:11,pointerEvents:"none"}}>▾</span>
-                    </div>
+                    <CustomSelect
+                      disabled={item.officeLocked}
+                      value={item.serviceId || ""}
+                      onChange={(nextValue) => {
+                        const nextService = (completeDraft.availableServices || []).find((serviceItem) => serviceItem.serviceId === nextValue);
+                        setCompleteDraft((prev) => ({
+                          ...prev,
+                          serviceItems: prev.serviceItems.map((serviceItem, serviceIndex) => serviceIndex === index ? {
+                            ...serviceItem,
+                            serviceId: nextValue,
+                            name: nextService?.name || "",
+                          } : serviceItem),
+                        }));
+                      }}
+                      placeholder={completeDraft.availableServices?.length ? "Выбери услугу" : "Нет услуг в подуслуге"}
+                      options={(completeDraft.availableServices || []).map((serviceOption) => ({ value: serviceOption.serviceId, label: serviceOption.name }))}
+                      triggerStyle={{ minHeight: 38, borderRadius: 10, fontSize: 16, background: item.officeLocked ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.06)", color: item.officeLocked ? "#9fb1d1" : undefined }}
+                      menuZIndex={1400}
+                    />
                     <Fld disabled={item.officeLocked} value={String(item.quantity || 1)} onChange={(value) => setCompleteDraft((prev) => ({ ...prev, serviceItems: prev.serviceItems.map((serviceItem, serviceIndex) => serviceIndex === index ? { ...serviceItem, quantity: Math.max(1, Number(value.replace(/[^\d]/g, "") || 1)) } : serviceItem) }))} placeholder="1" />
                     <Fld disabled={item.officeLocked} value={String(item.unitPrice || "")} onChange={(value) => setCompleteDraft((prev) => ({ ...prev, serviceItems: prev.serviceItems.map((serviceItem, serviceIndex) => serviceIndex === index ? { ...serviceItem, unitPrice: value.replace(/[^\d]/g, "") } : serviceItem) }))} placeholder="Цена" />
                     <button disabled={item.officeLocked} onClick={() => setCompleteDraft((prev) => ({ ...prev, serviceItems: prev.serviceItems.filter((_, serviceIndex) => serviceIndex !== index) }))} style={{height:38,borderRadius:10,border:"1px solid rgba(255,82,82,0.25)",background:item.officeLocked?"rgba(255,255,255,0.04)":"rgba(255,82,82,0.12)",color:item.officeLocked?"#7282a5":"#ff9ea1",fontSize:14,cursor:item.officeLocked?"not-allowed":"pointer",fontFamily:"inherit"}}>×</button>
@@ -2883,15 +3380,24 @@ const EmployeesPage = ({
       <div style={{display:"flex",gap:10,alignItems:"center",padding:"0 12px",height:40,borderRadius:8,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",marginBottom:22}}>
         <div style={{fontSize:11,color:"#5a6a8a"}}>🔍</div>
         <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Поиск по имени, телефону, городу..." style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#dbe4ff",fontSize:11,fontFamily:"inherit"}} />
-        <select value={cityFilter} onChange={(e)=>setCityFilter(e.target.value)} style={{height:24,padding:"0 10px",borderRadius:6,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.04)",color:"#8892b0",fontSize:10,fontFamily:"inherit",outline:"none"}}>
-          <option value="all">Все города</option>
-          {Object.keys(visibleCities).map((cityName) => <option key={cityName} value={cityName}>{cityName}</option>)}
-        </select>
-        <select value={accessFilter} onChange={(e)=>setAccessFilter(e.target.value)} style={{height:24,padding:"0 10px",borderRadius:6,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.04)",color:"#8892b0",fontSize:10,fontFamily:"inherit",outline:"none"}}>
-          <option value="all">Все статусы</option>
-          <option value="with_access">С доступом</option>
-          <option value="no_access">Без доступа</option>
-        </select>
+        <CustomSelect
+          value={cityFilter}
+          onChange={setCityFilter}
+          options={[{ value: "all", label: "Все города" }, ...Object.keys(visibleCities).map((cityName) => ({ value: cityName, label: cityName }))]}
+          triggerStyle={{ minHeight: 24, padding: "4px 26px 4px 10px", borderRadius: 6, fontSize: 10, width: 120, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#8892b0" }}
+          menuZIndex={1200}
+        />
+        <CustomSelect
+          value={accessFilter}
+          onChange={setAccessFilter}
+          options={[
+            { value: "all", label: "Все статусы" },
+            { value: "with_access", label: "С доступом" },
+            { value: "no_access", label: "Без доступа" },
+          ]}
+          triggerStyle={{ minHeight: 24, padding: "4px 26px 4px 10px", borderRadius: 6, fontSize: 10, width: 120, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#8892b0" }}
+          menuZIndex={1200}
+        />
       </div>
 
       <div style={{display:"flex",flexDirection:"column",gap:18}}>
@@ -3287,6 +3793,7 @@ const DataAdminView = ({
 
 const OrdersExplorerView = ({
   orders,
+  deletedOrders,
   cities,
   employees,
   currentUser,
@@ -3298,6 +3805,7 @@ const OrdersExplorerView = ({
   onClose,
 }) => {
   const isMobileView = typeof window !== "undefined" ? window.innerWidth < 760 : false;
+  const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState("");
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
   const [statusFilter, setStatusFilter] = useState("");
@@ -3312,9 +3820,10 @@ const OrdersExplorerView = ({
   const serviceIndex = useMemo(() => buildServiceIndex(services || []), [services]);
   const todayValue = dstr(new Date());
   const tomorrowValue = dstr(new Date(Date.now() + 86400000));
+  const visibleOrders = showArchived ? (deletedOrders || {}) : (orders || {});
 
   const orderRows = useMemo(() => {
-    const rows = Object.entries(orders || {}).map(([key, order]) => {
+    const rows = Object.entries(visibleOrders).map(([key, order]) => {
       const [cityFromKey = "", masterFromKey = "", dateFromKey = "", timeIdxFromKey = "0"] = key.split("|");
       const masterEmployee = employees.find((employee) => employee.id === order?._masterId) || employees.find((employee) => employee.name === masterFromKey && employee.type === "technician");
       return {
@@ -3332,11 +3841,12 @@ const OrdersExplorerView = ({
         serviceDirectionName: order?.serviceDirectionName || "",
         serviceSubcategoryName: order?.serviceSubcategoryName || "",
         source: order?.source || "",
+        archivedAt: order?.archivedAt || null,
       };
     });
     if (currentUser?.role === "technician") return rows.filter((row) => row.masterId === currentUser.id);
     return rows;
-  }, [currentUser?.id, currentUser?.role, employees, orders]);
+  }, [currentUser?.id, currentUser?.role, employees, visibleOrders]);
 
   const cityOptions = useMemo(() => Object.keys(cities || {}).sort((a, b) => a.localeCompare(b, "ru")).map((city) => ({ value: city, label: city })), [cities]);
   const statusOptions = useMemo(() => (statuses || []).map((status) => ({ value: status.name, label: status.name })), [statuses]);
@@ -3477,13 +3987,14 @@ const OrdersExplorerView = ({
         {!isMobileView && <div />}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:isMobileView?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(160px,1fr)) auto auto",gap:10,alignItems:"end",flexShrink:0}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobileView?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(160px,1fr)) auto auto auto",gap:10,alignItems:"end",flexShrink:0}}>
         <PickerField label="Направление" value={directionFilter} onChange={setDirectionFilter} options={directionOptions} placeholder="Все направления" />
         <PickerField label="Подуслуга" value={subcategoryFilter} onChange={setSubcategoryFilter} options={subcategoryOptions} placeholder="Все подуслуги" />
         <PickerField label="Мастер" value={masterFilter} onChange={setMasterFilter} options={masterOptions} placeholder="Все мастера" />
         <PickerField label="Откуда узнали" value={sourceFilter} onChange={setSourceFilter} options={sourceOptions} placeholder="Все источники" />
         {!isMobileView && <div />}
         <button type="button" onClick={resetFilters} style={{height:38,padding:"0 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.04)",color:"#dbe4ff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Сбросить</button>
+        <button type="button" onClick={()=>setShowArchived((prev)=>!prev)} style={{height:38,padding:"0 14px",borderRadius:10,border:showArchived?"1px solid rgba(120,230,255,0.42)":"1px solid rgba(255,255,255,0.12)",background:showArchived?"rgba(80,220,255,0.16)":"rgba(255,255,255,0.04)",color:showArchived?"#dff7ff":"#dbe4ff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{showArchived ? "Обычные заказы" : "Архив"}</button>
       </div>
 
       <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-start",flexShrink:0}}>
@@ -3506,7 +4017,7 @@ const OrdersExplorerView = ({
             const meta = statusMeta(row.status, statusMap);
             if (isMobileView) {
               return (
-                <div key={row.key} onClick={() => onOpenOrder(row.key, row)} style={{padding:"12px 14px",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:"pointer",background:meta.cardBg,display:"grid",gridTemplateColumns:"78px 1fr 84px",gap:10,alignItems:"center"}}>
+                <div key={row.key} onClick={() => !showArchived && onOpenOrder(row.key, row)} style={{padding:"12px 14px",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:showArchived?"default":"pointer",background:meta.cardBg,display:"grid",gridTemplateColumns:"78px 1fr 84px",gap:10,alignItems:"center"}}>
                   <div style={{fontSize:12,fontWeight:900,color:meta.cardText,lineHeight:1.25}}>
                     <div>{formatOrderNumber(row.orderNumber)}</div>
                     <div style={{opacity:0.82,marginTop:2}}>{row.displayRange}</div>
@@ -3519,7 +4030,7 @@ const OrdersExplorerView = ({
               );
             }
             return (
-              <div key={row.key} onClick={() => onOpenOrder(row.key, row)} style={{display:"grid",gridTemplateColumns:tableColumns,gap:0,padding:"12px 14px",alignItems:"stretch",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:"pointer",background:meta.cardBg}}>
+              <div key={row.key} onClick={() => !showArchived && onOpenOrder(row.key, row)} style={{display:"grid",gridTemplateColumns:tableColumns,gap:0,padding:"12px 14px",alignItems:"stretch",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:showArchived?"default":"pointer",background:meta.cardBg}}>
                 <div style={{minWidth:0,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",fontSize:13,fontWeight:800,color:meta.cardText}}>{formatOrderNumber(row.orderNumber)}</div>
                 <div style={{minWidth:0,paddingLeft:14,paddingRight:10,borderLeft:"1px solid rgba(255,255,255,0.06)",fontSize:13,color:meta.cardText,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center"}}>{formatShortDate(row.dateStr)}</div>
                 <div style={{minWidth:0,paddingLeft:14,paddingRight:10,borderLeft:"1px solid rgba(255,255,255,0.06)",fontSize:13,color:meta.cardText,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{row.displayRange}</div>
@@ -3537,7 +4048,7 @@ const OrdersExplorerView = ({
               </div>
             );
           })}
-          {!filteredRows.length && <div style={{padding:"54px 24px",textAlign:"center",color:"#7f92ba"}}>Заказы по текущим фильтрам не найдены.</div>}
+          {!filteredRows.length && <div style={{padding:"54px 24px",textAlign:"center",color:"#7f92ba"}}>{showArchived ? "Удаленные заявки по текущим фильтрам не найдены." : "Заказы по текущим фильтрам не найдены."}</div>}
         </div>
       </div>
     </div>
@@ -3952,15 +4463,13 @@ const ContactsView = ({
                   </div>
                   <div style={{minWidth:0,paddingLeft:14,paddingRight:10,borderLeft:"1px solid rgba(255,255,255,0.06)",fontSize:13,color:"#b5c5e4",whiteSpace:"normal",lineHeight:1.25,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center"}}>{contact.city || "—"}</div>
                   <div style={{minWidth:0,paddingLeft:14,paddingRight:10,borderLeft:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <div style={{position:"relative"}}>
-                      <div style={{width:"100%",maxWidth:"100%",height:32,display:"flex",alignItems:"center",justifyContent:"center",background:meta.pillBg,border:`1px solid ${meta.pillBorder}`,borderRadius:999,color:meta.pillText,fontSize:10,fontWeight:700,padding:"0 20px 0 10px",textAlign:"center",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",boxSizing:"border-box"}}>
-                        {contact.status || "—"}
-                      </div>
-                      <span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:meta.pillText,fontSize:9,pointerEvents:"none"}}>▾</span>
-                      <select value={contact.status || ""} onClick={(e)=>e.stopPropagation()} onChange={(e)=>quickStatusChange(contact, e.target.value)} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",appearance:"none",WebkitAppearance:"none",MozAppearance:"none"}}>
-                        {contactStatuses.map((status) => <option key={status.name} value={status.name} style={{background:"#1a1a2e",color:"#dbe4ff"}}>{status.name}</option>)}
-                      </select>
-                    </div>
+                    <CustomSelect
+                      value={contact.status || ""}
+                      onChange={(nextValue) => quickStatusChange(contact, nextValue)}
+                      options={contactStatuses.map((status) => ({ value: status.name, label: status.name }))}
+                      triggerStyle={{minHeight:32,height:32,borderRadius:999,background:meta.pillBg,border:`1px solid ${meta.pillBorder}`,color:meta.pillText,fontSize:11,fontWeight:800,padding:"0 24px 0 12px",textAlign:"center",justifyContent:"center",width:142,boxShadow:"none"}}
+                      menuZIndex={1300}
+                    />
                   </div>
                   <div style={{minWidth:0,paddingLeft:14,paddingRight:10,borderLeft:"1px solid rgba(255,255,255,0.06)",fontSize:13,color:"#b5c5e4",lineHeight:1.3,whiteSpace:"normal",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center"}}>{contact.reason || "—"}</div>
                   <div style={{minWidth:0,paddingLeft:14,paddingRight:10,borderLeft:"1px solid rgba(255,255,255,0.06)",fontSize:13,color:"#b5c5e4",whiteSpace:"nowrap",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center"}}>{contact.callbackDate ? formatDateRu(contact.callbackDate) : "—"}</div>
@@ -4416,26 +4925,38 @@ const MobileDashboard = ({
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
                     <div className="m-section-title">Город</div>
-                    <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className="m-input">
-                      <option value="" style={{ background: "#1a1a2e" }}>Текущий ({activeCity})</option>
-                      {cityList.map((c) => <option key={c} value={c} style={{ background: "#1a1a2e" }}>{c}</option>)}
-                    </select>
+                    <CustomSelect
+                      value={filterCity}
+                      onChange={setFilterCity}
+                      placeholder={`Текущий (${activeCity})`}
+                      options={cityList.map((c) => ({ value: c, label: c }))}
+                      triggerStyle={{ minHeight: 44, borderRadius: 12, fontSize: 13, background: "rgba(255,255,255,0.035)" }}
+                      menuZIndex={1400}
+                    />
                   </div>
 
                   <div>
                     <div className="m-section-title">Статус</div>
-                    <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="m-input">
-                      <option value="" style={{ background: "#1a1a2e" }}>Все статусы</option>
-                      {(statuses || []).map((s) => <option key={s.name} value={s.name} style={{ background: "#1a1a2e" }}>{s.name}</option>)}
-                    </select>
+                    <CustomSelect
+                      value={filterStatus}
+                      onChange={setFilterStatus}
+                      placeholder="Все статусы"
+                      options={(statuses || []).map((s) => ({ value: s.name, label: s.name }))}
+                      triggerStyle={{ minHeight: 44, borderRadius: 12, fontSize: 13, background: "rgba(255,255,255,0.035)" }}
+                      menuZIndex={1400}
+                    />
                   </div>
 
                   <div>
                     <div className="m-section-title">Мастер</div>
-                    <select value={filterMaster} onChange={(e) => setFilterMaster(e.target.value)} className="m-input">
-                      <option value="" style={{ background: "#1a1a2e" }}>Все мастера</option>
-                      {masterList.map((m) => <option key={m.id || empKey(m)} value={m.id || empKey(m)} style={{ background: "#1a1a2e" }}>{m.name} {m.city ? `· ${m.city}` : ""}</option>)}
-                    </select>
+                    <CustomSelect
+                      value={filterMaster}
+                      onChange={setFilterMaster}
+                      placeholder="Все мастера"
+                      options={masterList.map((m) => ({ value: m.id || empKey(m), label: `${m.name}${m.city ? ` · ${m.city}` : ""}` }))}
+                      triggerStyle={{ minHeight: 44, borderRadius: 12, fontSize: 13, background: "rgba(255,255,255,0.035)" }}
+                      menuZIndex={1400}
+                    />
                   </div>
 
                   <div>
@@ -4446,14 +4967,22 @@ const MobileDashboard = ({
                   <div>
                     <div className="m-section-title">Время (от — до)</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      <select value={filterTimeFrom} onChange={(e) => setFilterTimeFrom(e.target.value)} className="m-input">
-                        <option value="" style={{ background: "#1a1a2e" }}>с любого</option>
-                        {TIMES.map((t, idx) => <option key={t} value={idx} style={{ background: "#1a1a2e" }}>{t}</option>)}
-                      </select>
-                      <select value={filterTimeTo} onChange={(e) => setFilterTimeTo(e.target.value)} className="m-input">
-                        <option value="" style={{ background: "#1a1a2e" }}>до любого</option>
-                        {TIMES.map((t, idx) => <option key={t} value={idx + 1} style={{ background: "#1a1a2e" }}>{slotLabel(idx + 1)}</option>)}
-                      </select>
+                      <CustomSelect
+                        value={filterTimeFrom}
+                        onChange={setFilterTimeFrom}
+                        placeholder="с любого"
+                        options={TIMES.map((t, idx) => ({ value: idx, label: t }))}
+                        triggerStyle={{ minHeight: 44, borderRadius: 12, fontSize: 13, background: "rgba(255,255,255,0.035)" }}
+                        menuZIndex={1400}
+                      />
+                      <CustomSelect
+                        value={filterTimeTo}
+                        onChange={setFilterTimeTo}
+                        placeholder="до любого"
+                        options={TIMES.map((t, idx) => ({ value: idx + 1, label: slotLabel(idx + 1) }))}
+                        triggerStyle={{ minHeight: 44, borderRadius: 12, fontSize: 13, background: "rgba(255,255,255,0.035)" }}
+                        menuZIndex={1400}
+                      />
                     </div>
                   </div>
 
@@ -4509,7 +5038,7 @@ export default function CRM() {
   const [editAccessEmployee,setEditAccessEmployee]=useState(null);
   const [editAccessSaving,setEditAccessSaving]=useState(false);
   const [month,setMonth]=useState(3);
-  const [year]=useState(2026);
+  const [year,setYear]=useState(2026);
   const [showSummary,setShowSummary]=useState(false);
   const [showServiceCatalog,setShowServiceCatalog]=useState(false);
   const [showDataView,setShowDataView]=useState(false);
@@ -4521,6 +5050,8 @@ export default function CRM() {
   const [contacts,setContacts]=useState(INIT_CONTACTS);
   const [contactStatuses,setContactStatuses]=useState(INIT_CONTACT_STATUSES);
   const [contactReasons,setContactReasons]=useState(INIT_CONTACT_REASONS);
+  const [deletedOrders,setDeletedOrders]=useState({});
+  const [deleteEmployeeDraft,setDeleteEmployeeDraft]=useState(null);
   const [contactToOrderDraft,setContactToOrderDraft]=useState(null);
   const [serviceEditor,setServiceEditor]=useState(null);
   const [serviceSaving,setServiceSaving]=useState(false);
@@ -4551,6 +5082,7 @@ export default function CRM() {
     slotLocks: {},
     activeCity: "Краснодар",
     month: 3,
+    year: 2026,
     showSummary: false,
     showServiceCatalog: false,
     showDataView: false,
@@ -4563,6 +5095,7 @@ export default function CRM() {
     contacts: INIT_CONTACTS,
     contactStatuses: INIT_CONTACT_STATUSES,
     contactReasons: INIT_CONTACT_REASONS,
+    deletedOrders: {},
     currentUser: null,
   }), []);
 
@@ -4781,12 +5314,14 @@ export default function CRM() {
     setDayOffs(snapshot.dayOffs);
     setBusySlots(snapshot.busySlots || {});
     setSlotLocks(pruneExpiredSlotLocks(snapshot.slotLocks || {}));
+    setDeletedOrders(snapshot.deletedOrders || {});
     setContacts(snapshot.contacts || INIT_CONTACTS);
     setContactStatuses(snapshot.contactStatuses || INIT_CONTACT_STATUSES);
     setContactReasons(snapshot.contactReasons || INIT_CONTACT_REASONS);
     if (preserveUiState) {
       setActiveCity((prev) => snapshot.cities?.[prev] ? prev : (Object.keys(snapshot.cities || {})[0] || "Краснодар"));
       setMonth((prev) => prev ?? 3);
+      setYear((prev) => prev ?? 2026);
       setShowSummary((prev) => prev);
       setShowServiceCatalog((prev) => prev);
       setShowDataView((prev) => prev);
@@ -4794,6 +5329,7 @@ export default function CRM() {
     } else {
       setActiveCity(snapshot.activeCity || "Краснодар");
       setMonth(snapshot.month ?? 3);
+      setYear(snapshot.year ?? 2026);
       setShowSummary(Boolean(snapshot.showSummary));
       setShowServiceCatalog(Boolean(snapshot.showServiceCatalog));
       setShowDataView(Boolean(snapshot.showDataView));
@@ -4990,10 +5526,14 @@ export default function CRM() {
       return;
     }
     setRemoteError("");
+    const archivedOrder = popup.data ? { ...popup.data, archivedAt: new Date().toISOString() } : null;
     if (isSupabaseConfigured() && authSession?.access_token && popup.data?._id) {
       const previousPopup = popup;
       const previousOrder = popup.data;
       const previousHistory = orderHistory[popup.key] || [];
+      if (archivedOrder) {
+        setDeletedOrders((prev) => ({ ...prev, [popup.key]: archivedOrder }));
+      }
       setOrders((prev) => {
         const next = { ...prev };
         delete next[popup.key];
@@ -5011,15 +5551,23 @@ export default function CRM() {
       } catch (error) {
         setOrders((prev) => ({ ...prev, [previousPopup.key]: previousOrder }));
         setOrderHistory((prev) => ({ ...prev, [previousPopup.key]: previousHistory }));
+        setDeletedOrders((prev) => {
+          const next = { ...prev };
+          delete next[previousPopup.key];
+          return next;
+        });
         setPopup(previousPopup);
         setRemoteError(error.message);
         return;
       }
     }
     pushHistory(popup.key, makeHistoryEntry(currentUser?.name || "Локальный пользователь", "Удалил заказ", `${popup.data?.name || "Без имени"} · ${popup.data?.address || "Без адреса"}`));
+    if (archivedOrder) {
+      setDeletedOrders((prev) => ({ ...prev, [popup.key]: archivedOrder }));
+    }
     setOrders(p=>{const n={...p};delete n[popup.key];return n;});
     setPopup(null);
-  },[authSession, currentUser, popup, pushHistory, refreshFromSource]);
+  },[authSession, currentUser, orderHistory, popup, pushHistory, refreshFromSource]);
   const toggleOff=useCallback(async (c,m,d)=>{
     const k = dok(c,m,d);
     setRemoteError("");
@@ -5210,7 +5758,7 @@ export default function CRM() {
     setRemoteError("");
     try {
       if (isSupabaseConfigured() && authSession?.access_token) {
-        await upsertEmployee({
+        const savedEmployee = await upsertEmployee({
           employee: employeeForm,
           currentUserRole: currentUser?.role,
           session: authSession,
@@ -5220,6 +5768,12 @@ export default function CRM() {
           setCurrentUser((prev) => prev ? { ...prev, name: employeeForm.name, city: employeeForm.city || prev.city } : prev);
         }
         await refreshFromSource(authSession, { preserveUiState: true });
+        const savedId = savedEmployee?.id || employeeForm.id;
+        setEmployees((prev) => prev.map((employee) => (
+          employee.id === savedId || (employee.name === employeeForm.name && employee.type === employeeForm.type && employee.city === employeeForm.city)
+            ? { ...employee, workSchedule: normalizeWorkSchedule(employeeForm.workSchedule), workScheduleEffectiveFrom: employeeForm.workScheduleEffectiveFrom || employee.workScheduleEffectiveFrom || dstr(new Date()), residenceAddress: employeeForm.residenceAddress, residenceLat: employeeForm.residenceLat, residenceLng: employeeForm.residenceLng, serviceScopes: employeeForm.serviceScopes || employee.serviceScopes }
+            : employee
+        )));
       } else if (employeeForm.id) {
         setEmployees((prev) => prev.map((employee) => employee.id === employeeForm.id ? { ...employee, ...employeeForm } : employee));
       } else {
@@ -5629,8 +6183,10 @@ export default function CRM() {
         setDayOffs(snapshot.dayOffs);
         setBusySlots(snapshot.busySlots || {});
         setSlotLocks(pruneExpiredSlotLocks(snapshot.slotLocks || {}));
+        setDeletedOrders(snapshot.deletedOrders || {});
         setActiveCity(snapshot.activeCity);
         setMonth(snapshot.month);
+        setYear(snapshot.year ?? 2026);
         setShowSummary(snapshot.showSummary);
         setShowServiceCatalog(Boolean(snapshot.showServiceCatalog));
         setShowDataView(Boolean(snapshot.showDataView));
@@ -5667,6 +6223,7 @@ export default function CRM() {
       slotLocks: pruneExpiredSlotLocks(slotLocks),
       activeCity,
       month,
+      year,
       showSummary,
       showServiceCatalog,
       showDataView,
@@ -5679,9 +6236,10 @@ export default function CRM() {
       contacts,
       contactStatuses,
       contactReasons,
+      deletedOrders,
       currentUser,
     }, authSession);
-  }, [activeCity, authSession, busySlots, cities, contactReasons, contactStatuses, contacts, currentUser, dayOffs, employees, isHydrated, month, orderHistory, orders, showContactsView, showDataView, showOrdersExplorerView, showServiceCatalog, showSummary, slotLocks, sources, services, statuses, visibleStatusNames]);
+  }, [activeCity, authSession, busySlots, cities, contactReasons, contactStatuses, contacts, currentUser, dayOffs, deletedOrders, employees, isHydrated, month, year, orderHistory, orders, showContactsView, showDataView, showOrdersExplorerView, showServiceCatalog, showSummary, slotLocks, sources, services, statuses, visibleStatusNames]);
 
   const handleLogin = useCallback(async ({ email, password }) => {
     setAuthPending(true);
@@ -6042,7 +6600,6 @@ export default function CRM() {
   const cloudColor = remoteError ? "#ff8a80" : "#f4f7ff";
   const cloudBorder = remoteError ? "1px solid rgba(255,82,82,0.34)" : PANEL_BR;
   const cloudBg = remoteError ? "rgba(255,82,82,0.12)" : "rgba(255,255,255,0.045)";
-
   const isAdminOrCallCenter = currentUser?.role === "admin" || currentUser?.role === "call_center";
   const isAnySubViewOpen = showEmployeeList || showOrdersExplorerView || showContactsView || showDataView || showServiceCatalog || showSummary;
   const showMobileDashboard = isMobile && isAdminOrCallCenter && !isAnySubViewOpen;
@@ -6108,9 +6665,14 @@ export default function CRM() {
           <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
             {currentUser&&<div className="pill" style={{height:38,display:"inline-flex",alignItems:"center",padding:"0 12px",borderRadius:12,fontSize:12,fontWeight:600,color:"#9fb1d1"}}>{currentUser.name}{currentUser.role==="admin"?" 🧑‍💼":""}</div>}
             <div style={{height:38,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 8px",borderRadius:12,fontSize:11,fontWeight:600,color:cloudColor,textAlign:"center",whiteSpace:"nowrap",background:cloudBg,border:cloudBorder,boxShadow:"inset 0 1px 0 rgba(255,255,255,0.04)"}}>☁ {cloudLabel}</div>
-            <div className="pill" style={{height:38,padding:"0 12px",borderRadius:12,display:"inline-flex",alignItems:"center"}}>
-              <select value={month} onChange={e=>setMonth(parseInt(e.target.value))} style={{background:"transparent",border:"none",padding:"0 8px",height:38,color:"#9fb1d1",fontSize:12,fontWeight:600,outline:"none",fontFamily:"inherit",cursor:"pointer"}}>{MONTHS.map((m,i)=><option key={i} value={i} style={{background:"#1b1f39"}}>{m}</option>)}</select>
-            </div>
+            <MonthYearPicker
+              month={month}
+              year={year}
+              onChange={({ month: nextMonth, year: nextYear }) => {
+                setMonth(nextMonth);
+                setYear(nextYear);
+              }}
+            />
             {canEditOrders(currentUser) && <button onClick={()=>setShowNew(true)} className="tb" style={{height:44,padding:"0 18px",borderRadius:12,fontSize:13,fontWeight:800,background:"linear-gradient(135deg,#65ffdd,#18c5be)",color:"#0a0a23"}}>➕ Новый заказ</button>}
             {isSupabaseConfigured() && authSession?.access_token && currentUser?.role === "admin" && (
               <div style={{position:"relative"}}>
@@ -6231,8 +6793,8 @@ export default function CRM() {
       </div>
 
       <div style={isMobile && isAnySubViewOpen ? {height:"calc(100vh - 74px)",overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain"} : undefined}>
-      {showEmployeeList ? <EmployeesPage employees={employees} groupedEmployees={groupedEmployees} visibleCities={visibleCities} currentUser={currentUser} onOpenEmployee={openEmployeeCard} onAddEmployee={()=>{openEmployeeCard({ type:"", city:"", color:MCOLORS[0] }, { fromList: true });setShowAddEmployee(true);}} onProvisionAccess={setAccessEmployee} onEditAccess={setEditAccessEmployee} onOpenPermissions={setPermissionsEmployee} onDeleteEmployee={handleDeleteEmployee} onClose={openOrdersView} /> :
-      showOrdersExplorerView ? <OrdersExplorerView orders={orders} cities={cities} employees={employees} currentUser={currentUser} services={services} statuses={statuses} sources={sources} onOpenOrder={handleOpenOrderFromList} onOpenNew={()=>setShowNew(true)} onClose={openOrdersView} /> :
+      {showEmployeeList ? <EmployeesPage employees={employees} groupedEmployees={groupedEmployees} visibleCities={visibleCities} currentUser={currentUser} onOpenEmployee={openEmployeeCard} onAddEmployee={()=>{openEmployeeCard({ type:"", city:"", color:MCOLORS[0] }, { fromList: true });setShowAddEmployee(true);}} onProvisionAccess={setAccessEmployee} onEditAccess={setEditAccessEmployee} onOpenPermissions={setPermissionsEmployee} onDeleteEmployee={setDeleteEmployeeDraft} onClose={openOrdersView} /> :
+      showOrdersExplorerView ? <OrdersExplorerView orders={orders} deletedOrders={deletedOrders} cities={cities} employees={employees} currentUser={currentUser} services={services} statuses={statuses} sources={sources} onOpenOrder={handleOpenOrderFromList} onOpenNew={()=>setShowNew(true)} onClose={openOrdersView} /> :
       showContactsView ? <ContactsView cities={cities} employees={employees} currentUser={currentUser} contacts={contacts} contactStatuses={contactStatuses} contactReasons={contactReasons} onSaveContact={handleSaveContact} onCreateOrderFromContact={handleCreateOrderFromContact} onClose={openOrdersView} /> :
       showDataView ? <DataAdminView cities={cities} sources={sources} statuses={statuses} contactStatuses={contactStatuses} contactReasons={contactReasons} currentUser={currentUser} onAddCity={async (n,c,coords)=>{
         if (isSupabaseConfigured() && authSession?.access_token) {
@@ -6259,6 +6821,9 @@ export default function CRM() {
             const d=dstr(date);const isWe=date.getDay()===0||date.getDay()===6;const isT=d===today;
             return cityMasters.map((master,mi)=>{
               const isF=mi===0;const isL=mi===cityMasters.length-1;const off=dayOffs[dok(activeCity,master.name,d)];
+              const scheduleActive = isScheduleActiveFromDate(master, d);
+              const workSchedule = normalizeWorkSchedule(master.workSchedule);
+              const workingDaySlots = workSchedule[String(date.getDay())] || [];
               const rowLayout = buildOrderLayoutMap(orders, activeCity, master.name, d);
               return (<tr key={`${di}-${mi}`} style={{background:isT?"rgba(100,255,218,0.03)":isWe?"rgba(255,255,255,0.015)":"transparent"}}>
                 {isF&&<td ref={isT ? todayRowRef : null} className="sticky-col" rowSpan={cityMasters.length} style={{left:0,zIndex:30,background:isT?"#1a2a3a":isWe?"#151528":"#0e0e20",padding:"0 7px",borderBottom:"1px solid rgba(255,255,255,0.08)",verticalAlign:"middle",textAlign:"center",minWidth:72,width:72}}>
@@ -6292,7 +6857,10 @@ export default function CRM() {
                     const busy = busySlots[bok(activeCity,master.name,d,ti)];
                     const lock = activeSlotLocks[lok(activeCity, master.name, d, ti)] || null;
                     const ownLock = lock && lock.employeeId === currentLockOwnerId;
+	                    const notWorking = scheduleActive && !Boolean(workingDaySlots[ti] ?? true);
+	                    const orderScheduleConflict = Boolean(order && notWorking);
                     const openCell = () => {
+                      if (notWorking && !order) return;
                       if (!order && !canEditOrders(currentUser)) return;
                       if (busy && !order) return;
                       if (lock && !ownLock && !order) {
@@ -6310,8 +6878,8 @@ export default function CRM() {
                     };
                     cells.push(
                       <td key={ti} colSpan={span} style={{padding:2,borderBottom:isL?"1px solid rgba(255,255,255,0.08)":"1px solid rgba(255,255,255,0.03)"}}>
-                        <div className={`cs ${order ? "" : "emptyCell"}`} onClick={openCell} style={{height:48,borderRadius:6,padding:order?4:0,background:order?statusMeta(order.status, statusMap).cardBg:"rgba(255,255,255,0.02)",border:order?`1px solid ${statusMeta(order.status, statusMap).cardBorder}`:busy?"2px dashed rgba(255,193,7,0.92)":"1px dashed rgba(255,255,255,0.06)",boxShadow:busy?"inset 0 0 0 1px rgba(255,193,7,0.16)":"none",display:"flex",alignItems:order?"flex-start":"center",justifyContent:order?"flex-start":"center",cursor:(!order && (!canEditOrders(currentUser) || busy || (lock && !ownLock)))?"default":"pointer",overflow:"hidden"}}>
-                          {order?<CellPreview statusMap={statusMap} data={{...maskTechnicianOrder(order, currentUser), displayPrice: order.status === "Выполнен" ? (order.finalPrice || order.price) : order.price}} />:lock && !ownLock ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,color:"#ff5d6c",width:"100%",padding:"4px 3px",lineHeight:1.1}}>
+	                        <div className={`cs ${order ? "" : "emptyCell"}`} onClick={openCell} style={{height:48,borderRadius:6,padding:order?4:0,background:order?(orderScheduleConflict?"linear-gradient(180deg, rgba(122,126,146,0.38), rgba(73,78,99,0.42))":statusMeta(order.status, statusMap).cardBg):notWorking?"repeating-linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0.02) 6px,rgba(255,255,255,0.05) 6px,rgba(255,255,255,0.05) 12px)":"rgba(255,255,255,0.02)",border:order?(orderScheduleConflict?"1px solid rgba(208,214,234,0.32)":`1px solid ${statusMeta(order.status, statusMap).cardBorder}`):notWorking?"1px solid rgba(255,255,255,0.08)":busy?"2px dashed rgba(255,193,7,0.92)":"1px dashed rgba(255,255,255,0.06)",boxShadow:busy?"inset 0 0 0 1px rgba(255,193,7,0.16)":orderScheduleConflict?"inset 0 0 0 1px rgba(255,255,255,0.06)":"none",display:"flex",alignItems:order?"flex-start":"center",justifyContent:order?"flex-start":"center",cursor:(!order && (notWorking || !canEditOrders(currentUser) || busy || (lock && !ownLock)))?"default":"pointer",overflow:"hidden",position:"relative"}}>
+	                          {order?<><CellPreview statusMap={statusMap} scheduleConflict={orderScheduleConflict} data={{...maskTechnicianOrder(order, currentUser), displayPrice: order.status === "Выполнен" ? (order.finalPrice || order.price) : order.price}} />{orderScheduleConflict && <div style={{position:"absolute",inset:0,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:"118%",height:1,background:"rgba(240,244,255,0.7)",transform:"rotate(-10deg)",boxShadow:"0 0 0 1px rgba(255,255,255,0.08)"}} /></div>}</>:notWorking?<div style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:"100%",color:"#6c748f",fontSize:10,fontWeight:700}}>не раб</div>:lock && !ownLock ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,color:"#ff5d6c",width:"100%",padding:"4px 3px",lineHeight:1.1}}>
                             <span style={{width:8,height:8,borderRadius:999,background:"#ff4d5f",boxShadow:"0 0 0 2px rgba(255,77,95,0.18)"}} />
                             <span style={{fontSize:8.2,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}}>{lock.employeeName || "Сотрудник"}</span>
                             <span style={{fontSize:8.2,fontWeight:800,color:"#ff6b78"}}>оформляется</span>
@@ -6347,6 +6915,7 @@ export default function CRM() {
       }} onClose={()=>setShowAddCity(false)} />}
       {showAdminMenu && <div onClick={()=>setShowAdminMenu(false)} style={{position:"fixed",inset:0,zIndex:1100}} />}
       {cityDeleteDraft && <CityDeletePopup draft={cityDeleteDraft} employees={employees} onChooseMode={(mode)=>setCityDeleteDraft((prev)=>prev ? { ...prev, mode, step: 2 } : prev)} onConfirm={async ()=>{ const removed = await deleteCity(cityDeleteDraft.cityName, cityDeleteDraft.mode); if (removed) setCityDeleteDraft(null); }} onClose={()=>setCityDeleteDraft(null)} />}
+      {deleteEmployeeDraft && <ConfirmDialog title={`Удалить сотрудника ${deleteEmployeeDraft.name}?`} onConfirm={async ()=>{ const employee = deleteEmployeeDraft; setDeleteEmployeeDraft(null); await handleDeleteEmployee(employee); }} onCancel={()=>setDeleteEmployeeDraft(null)} />}
       {employeeCard&&<EmployeeEditorPopup employee={employeeCard} currentUser={currentUser} cities={visibleCities} services={services} onSave={handleEmployeeCardSave} onClose={closeEmployeeCard} onProvisionAccess={()=>setAccessEmployee(employeeCard)} onEditAccess={()=>setEditAccessEmployee(employeeCard)} onOpenPermissions={()=>setPermissionsEmployee(employeeCard)} saving={employeeSavePending} dimmed={Boolean(permissionsEmployee || accessEmployee || editAccessEmployee)} />}
       {permissionsEmployee&&<EmployeePermissionsPopup employee={permissionsEmployee} saving={permissionsSaving} onSave={handlePermissionsSave} onClose={()=>setPermissionsEmployee(null)} />}
       {accessEmployee&&<EmployeeAccessPopup employee={accessEmployee} saving={accessSaving} error={remoteError} onSave={handleAccessSave} onClose={()=>setAccessEmployee(null)} />}
