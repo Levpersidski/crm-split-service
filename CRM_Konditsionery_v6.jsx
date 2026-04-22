@@ -79,14 +79,15 @@ const NEW_ORDER_DURATION_SLOTS = 1;
 const INIT_STATUSES = [
   { name:"Новый", shortLabel:"НОВЫЙ", tone:"amber", sortOrder:0 },
   { name:"Прозвонен", shortLabel:"ПРОЗВ.", tone:"sky", sortOrder:1 },
-  { name:"Подтверждён", shortLabel:"ПОДТВ.", tone:"green", sortOrder:2 },
-  { name:"Подтвержден мастером", shortLabel:"МАСТЕР", tone:"green", sortOrder:3 },
-  { name:"В пути", shortLabel:"В ПУТИ", tone:"blue", sortOrder:4 },
-  { name:"На объекте", shortLabel:"ОБЪЕКТ", tone:"violet", sortOrder:5 },
-  { name:"Выполнен", shortLabel:"ВЫПОЛН.", tone:"pink", sortOrder:6 },
-  { name:"Отменён", shortLabel:"ОТМЕН.", tone:"red", sortOrder:7 },
-  { name:"Перенесён", shortLabel:"ПЕРЕН.", tone:"yellow", sortOrder:8 },
-  { name:"Возврат в офис", shortLabel:"ВОЗВР.", tone:"red", sortOrder:9 },
+  { name:"Перезвонить", shortLabel:"ПЕРЕЗВ.", tone:"yellow", sortOrder:2 },
+  { name:"Подтверждён", shortLabel:"ПОДТВ.", tone:"green", sortOrder:3 },
+  { name:"Подтвержден мастером", shortLabel:"МАСТЕР", tone:"green", sortOrder:4 },
+  { name:"В пути", shortLabel:"В ПУТИ", tone:"blue", sortOrder:5 },
+  { name:"На объекте", shortLabel:"ОБЪЕКТ", tone:"violet", sortOrder:6 },
+  { name:"Выполнен", shortLabel:"ВЫПОЛН.", tone:"pink", sortOrder:7 },
+  { name:"Отменён", shortLabel:"ОТМЕН.", tone:"red", sortOrder:8 },
+  { name:"Перенесён", shortLabel:"ПЕРЕН.", tone:"yellow", sortOrder:9 },
+  { name:"Возврат в офис", shortLabel:"ВОЗВР.", tone:"red", sortOrder:10 },
 ];
 const INIT_CONTACT_STATUSES = [
   { name:"Новый", tone:"blue", sortOrder:0, systemKey:"new", isDefault:true },
@@ -233,9 +234,34 @@ const ConfirmDialog = ({ title, onConfirm, onCancel, confirmLabel = "Да", canc
     </div>
   </>
 );
+const CallbackDateDialog = ({ value, onChange, onConfirm, onCancel, error = false }) => (
+  <>
+    <div onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.46)",zIndex:1500}} />
+    <div style={{position:"fixed",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:"min(92vw, 380px)",borderRadius:18,background:"linear-gradient(180deg,#202746,#171c34)",border:"1px solid rgba(255,255,255,0.1)",boxShadow:"0 24px 60px rgba(0,0,0,0.46)",padding:"20px 18px",zIndex:1501}}>
+      <div style={{fontSize:18,fontWeight:800,color:"#f4f7ff",textAlign:"center"}}>Когда перезвонить?</div>
+      <div style={{fontSize:12,color:"#8fa1ca",textAlign:"center",marginTop:6}}>Выбери дату, и заявка уйдёт из сетки до дня перезвона.</div>
+      <div style={{marginTop:16}}>
+        <ContactDateField label="Дата перезвона" value={value} onChange={onChange} error={error} placeholder="Выбрать дату" />
+      </div>
+      {error && <div style={{fontSize:11,color:"#ffb36b",fontWeight:600,marginTop:8,textAlign:"center"}}>Укажи дату перезвона</div>}
+      <div style={{display:"flex",justifyContent:"center",gap:10,marginTop:18}}>
+        <button type="button" onClick={onConfirm} className="tb" style={{minWidth:120,height:40,padding:"0 16px",borderRadius:12,border:"1px solid rgba(100,255,218,0.28)",background:"linear-gradient(135deg,#65ffdd,#18c5be)",color:"#0a0a23",fontSize:13,fontWeight:800,fontFamily:"inherit"}}>Сохранить дату</button>
+        <button type="button" onClick={onCancel} className="tb" style={{minWidth:110,height:40,padding:"0 16px",borderRadius:12,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.04)",color:"#dbe4ff",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Отмена</button>
+      </div>
+    </div>
+  </>
+);
 const getStatusTone = (statusItem) => STATUS_TONES[statusItem?.tone] || STATUS_TONES.teal;
-const makeStatusMap = (statuses = INIT_STATUSES) => new Map((statuses || []).map((status, index) => [status.name, { ...status, sortOrder: Number(status.sortOrder ?? index) }]));
-const defaultStatusName = (statuses = INIT_STATUSES) => statuses?.[0]?.name || "Новый";
+const ensureOrderStatuses = (statuses = INIT_STATUSES) => {
+  const source = Array.isArray(statuses) ? statuses : [];
+  const merged = [...source];
+  INIT_STATUSES.forEach((status) => {
+    if (!merged.some((item) => item.name === status.name)) merged.push(status);
+  });
+  return merged.sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
+};
+const makeStatusMap = (statuses = INIT_STATUSES) => new Map(ensureOrderStatuses(statuses).map((status, index) => [status.name, { ...status, sortOrder: Number(status.sortOrder ?? index) }]));
+const defaultStatusName = (statuses = INIT_STATUSES) => ensureOrderStatuses(statuses)?.[0]?.name || "Новый";
 const makeStatusShortLabel = (name = "") => {
   const trimmed = String(name || "").trim();
   if (!trimmed) return "СТАТУС";
@@ -532,7 +558,11 @@ const orderConfirmedByTechnician = (order) => order?.status === "Подтвер�
 const orderReturnedToOffice = (order) => order?.status === "Возврат в офис" || Boolean(order?.officeAttentionRequired);
 const getOfficeAttentionIndicator = (order) => orderReturnedToOffice(order) ? "!" : "";
 const SPECIAL_ADMIN_ORDER_STATUSES = new Set(["Подтвержден мастером", "Возврат в офис"]);
-const statusCounterLabel = (statusName = "") => statusName === "Подтвержден мастером" ? "Мастер. подт." : statusName;
+const statusCounterLabel = (statusName = "") => {
+  if (statusName === "Подтвержден мастером") return "Мастер. подт.";
+  if (statusName === "Перезвонить") return "Перезвонить !";
+  return statusName;
+};
 const canUserSelectOrderStatus = (currentUser, statusName) => {
   if (currentUser?.role === "admin") return true;
   if (currentUser?.role === "call_center" && SPECIAL_ADMIN_ORDER_STATUSES.has(statusName)) return false;
@@ -655,12 +685,17 @@ const formatDurationLabel = (durationSlots) => {
   const value = Math.max(1, Number(durationSlots || 1));
   return `${value} ${value === 1 ? "час" : (value >= 2 && value <= 4 ? "часа" : "часов")}`;
 };
+const getOrderCallbackDateValue = (order) => toDateInputValue(order?.callbackDate || "");
+const isOrderCallbackStatus = (order) => order?.status === "Перезвонить";
+const isOrderCallbackDueOn = (order, dateStr) => isOrderCallbackStatus(order) && getOrderCallbackDateValue(order) === toDateInputValue(dateStr);
+const isOrderVisibleInSchedule = (order) => !isOrderCallbackStatus(order);
 const formatSelectedRange = (startIdx, durationSlots) => `${slotLabel(startIdx)}-${slotLabel(Number(startIdx) + Number(durationSlots || 1))}`;
 const formatHistoryValue = (field, value, related = {}) => {
   if (value === null || value === undefined || value === "") return "—";
   if (field === "dateStr") return formatShortDate(value);
   if (field === "timeIdx") return formatSelectedRange(Number(value), related.durationSlots);
   if (field === "durationSlots") return formatDurationLabel(value);
+  if (field === "callbackDate") return formatShortDate(value);
   return String(value);
 };
 const buildTransferHistoryDetails = (before = {}, after = {}) => (
@@ -672,7 +707,7 @@ const buildOrderLayoutMap = (orders, city, master, dateStr) => {
   const rowOrders = Object.entries(orders)
     .filter(([key]) => {
       const [c, m, d] = key.split("|");
-      return c === city && m === master && d === dateStr;
+      return c === city && m === master && d === dateStr && isOrderVisibleInSchedule(orders[key]);
     })
     .map(([key, order]) => ({ key, order }))
     .sort((a, b) => Number(a.order.timeIdx) - Number(b.order.timeIdx));
@@ -2031,6 +2066,7 @@ const buildOrderFormState = (data, fixedSlot, defaultStatus = "Новый") => {
     dateStr:fixedSlot?.dateStr||"",
     timeIdx:fixedSlot?.timeIdx!=null?fixedSlot.timeIdx:"",
     durationSlots:fixedSlot?.durationSlots || NEW_ORDER_DURATION_SLOTS,
+    callbackDate:"",
     serviceDirectionId:"",
     serviceDirectionName:"",
     serviceSubcategoryId:"",
@@ -2045,8 +2081,9 @@ const buildOrderFormState = (data, fixedSlot, defaultStatus = "Новый") => {
 const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAddSource,cities,employees,orders,dayOffs,busySlots,slotLocks,fixedSlot,historyEntries,currentUser,readOnly,allowDelete,orderNumber,services,statuses,onDraftSlotChange}) => {
   const currentRole = currentUser?.role || "";
   const lockOwnerId = currentUser?.id || currentUser?.name || "local-user";
-  const statusMap = useMemo(() => makeStatusMap(statuses), [statuses]);
-  const preferredStatus = useMemo(() => defaultStatusName(statuses), [statuses]);
+  const orderStatuses = useMemo(() => ensureOrderStatuses(statuses), [statuses]);
+  const statusMap = useMemo(() => makeStatusMap(orderStatuses), [orderStatuses]);
+  const preferredStatus = useMemo(() => defaultStatusName(orderStatuses), [orderStatuses]);
   const formSeed = data || initialData || null;
   const [f,setF]=useState(buildOrderFormState(maskTechnicianOrder(formSeed, currentUser), fixedSlot, preferredStatus));
   const [showHistory,setShowHistory]=useState(false);
@@ -2057,6 +2094,10 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
   const [slotMapOrder, setSlotMapOrder] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showCallbackDateDialog, setShowCallbackDateDialog] = useState(false);
+  const [callbackDateDraft, setCallbackDateDraft] = useState("");
+  const [callbackStatusFallback, setCallbackStatusFallback] = useState("");
+  const [callbackDatePromptAttempted, setCallbackDatePromptAttempted] = useState(false);
   const [pendingServiceId, setPendingServiceId] = useState("");
   const [saveAttempted, setSaveAttempted] = useState(false);
   const [preferredDurationSlots, setPreferredDurationSlots] = useState(() => Math.max(1, Number(buildOrderFormState(maskTechnicianOrder(formSeed, currentUser), fixedSlot, preferredStatus).durationSlots || NEW_ORDER_DURATION_SLOTS)));
@@ -2105,6 +2146,10 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
     setSavePending(false);
     setDeletePending(false);
     setShowDatePicker(false);
+    setShowCallbackDateDialog(false);
+    setCallbackDateDraft("");
+    setCallbackStatusFallback("");
+    setCallbackDatePromptAttempted(false);
     setPendingServiceId("");
     setSaveAttempted(false);
     setPreferredDurationSlots(Math.max(1, Number(nextState.durationSlots || NEW_ORDER_DURATION_SLOTS)));
@@ -2139,10 +2184,10 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
     };
   }, [showDatePicker]);
   useEffect(() => {
-    if (!statuses?.length) return;
+    if (!orderStatuses?.length) return;
     if (((data || initialData)?.status || f.status) && statusMap.has(f.status)) return;
     setF((prev) => ({ ...prev, status: preferredStatus }));
-  }, [data, f.status, initialData, preferredStatus, statusMap, statuses]);
+  }, [data, f.status, initialData, orderStatuses, preferredStatus, statusMap]);
   useEffect(() => {
     if (!isNew || typeof onDraftSlotChange !== "function") return undefined;
     if (!f.city || !f.master || !f.dateStr || f.timeIdx === "" || f.timeIdx == null) {
@@ -2352,7 +2397,7 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
       const scheduleActive = isScheduleActiveFromDate(m, f.dateStr);
       const workSchedule = normalizeWorkSchedule(m.workSchedule);
       const rowOrders = Object.values(orders)
-        .filter((order) => order.city === f.city && order.master === m.name && order.dateStr === f.dateStr && order._id !== data?._id);
+        .filter((order) => order.city === f.city && order.master === m.name && order.dateStr === f.dateStr && order._id !== data?._id && isOrderVisibleInSchedule(order));
       return {
         master:m,
         slots:TIMES.map((t,ti)=>{
@@ -2483,7 +2528,9 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
     source: !String(f.source || "").trim(),
   }), [f.address, f.city, f.dateStr, f.name, f.phone, f.source]);
   const hasRequiredOrderErrors = Object.values(requiredOrderErrors).some(Boolean);
-  const canSave = !savePending && !hasRequiredOrderErrors && !!f.master && f.timeIdx!=="" && !!f.dateStr && !!f.city && !!f.serviceDirectionId && !!f.serviceSubcategoryId && Number(f.durationSlots) > 0;
+  const callbackDateMissing = f.status === "Перезвонить" && !getOrderCallbackDateValue(f);
+  const callbackDateError = Boolean(saveAttempted && callbackDateMissing);
+  const canSave = !savePending && !hasRequiredOrderErrors && !callbackDateMissing && !!f.master && f.timeIdx!=="" && !!f.dateStr && !!f.city && !!f.serviceDirectionId && !!f.serviceSubcategoryId && Number(f.durationSlots) > 0;
   const scheduleChanged = useMemo(() => {
     if (!originalPlacement) return false;
     return (
@@ -2528,6 +2575,36 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
   const openDatePicker = () => {
     if (readOnly) return;
     setShowDatePicker((prev) => !prev);
+  };
+  const handleStatusSelect = (nextStatus) => {
+    if (readOnly) return;
+    if (nextStatus === "Перезвонить") {
+      setCallbackStatusFallback(f.status || preferredStatus);
+      setCallbackDatePromptAttempted(false);
+      setCallbackDateDraft(getOrderCallbackDateValue(f));
+      setF((prev) => ({ ...prev, status: nextStatus, callbackDate: getOrderCallbackDateValue(prev) ? prev.callbackDate : "" }));
+      if (!getOrderCallbackDateValue(f)) setShowCallbackDateDialog(true);
+      return;
+    }
+    setShowCallbackDateDialog(false);
+    setCallbackDatePromptAttempted(false);
+    setCallbackDateDraft("");
+    setCallbackStatusFallback("");
+    setF((prev) => ({ ...prev, status: nextStatus, callbackDate: "" }));
+  };
+  const confirmCallbackDate = () => {
+    setCallbackDatePromptAttempted(true);
+    if (!callbackDateDraft) return;
+    setF((prev) => ({ ...prev, status: "Перезвонить", callbackDate: fromDateInputValue(callbackDateDraft) }));
+    setShowCallbackDateDialog(false);
+    setCallbackDatePromptAttempted(false);
+  };
+  const cancelCallbackDateDialog = () => {
+    setShowCallbackDateDialog(false);
+    setCallbackDatePromptAttempted(false);
+    if (!getOrderCallbackDateValue(f) && callbackStatusFallback && callbackStatusFallback !== "Перезвонить") {
+      setF((prev) => ({ ...prev, status: callbackStatusFallback, callbackDate: "" }));
+    }
   };
 
   return (
@@ -2704,11 +2781,17 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
               {(f.serviceDirectionId&&f.serviceSubcategoryId&&(!f.city || !f.dateStr)) && <div style={{fontSize:11,color:"#7f92ba"}}>Выбери город и дату, чтобы увидеть доступные окна.</div>}
               <div style={{padding:"12px",borderRadius:12,background:"rgba(7,12,34,0.45)",border:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",gap:8}}>
                 <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1}}>Статус</div>
-                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{(statuses || []).map((statusItem)=>{const meta=statusMeta(statusItem.name, statusMap);const statusAllowed=canUserSelectOrderStatus(currentUser,statusItem.name);const disabled=readOnly||!statusAllowed;return(<button key={statusItem.name} disabled={disabled} onClick={()=>upd("status",statusItem.name)} style={{padding:"5px 10px",borderRadius:999,fontSize:10,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",border:f.status===statusItem.name?`1px solid ${meta.pillBorder}`:"1px solid rgba(255,255,255,0.1)",background:f.status===statusItem.name?meta.pillBg:(disabled?"rgba(255,255,255,0.03)":"rgba(255,255,255,0.04)"),color:f.status===statusItem.name?meta.pillText:(disabled?"#637292":"#8892b0"),fontWeight:f.status===statusItem.name?800:400,opacity:disabled&&f.status!==statusItem.name?0.6:1}}>{statusItem.name}</button>);})}</div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{orderStatuses.map((statusItem)=>{const meta=statusMeta(statusItem.name, statusMap);const statusAllowed=canUserSelectOrderStatus(currentUser,statusItem.name);const disabled=readOnly||!statusAllowed;return(<button key={statusItem.name} disabled={disabled} onClick={()=>handleStatusSelect(statusItem.name)} style={{padding:"5px 10px",borderRadius:999,fontSize:10,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",border:f.status===statusItem.name?`1px solid ${meta.pillBorder}`:"1px solid rgba(255,255,255,0.1)",background:f.status===statusItem.name?meta.pillBg:(disabled?"rgba(255,255,255,0.03)":"rgba(255,255,255,0.04)"),color:f.status===statusItem.name?meta.pillText:(disabled?"#637292":"#8892b0"),fontWeight:f.status===statusItem.name?800:400,opacity:disabled&&f.status!==statusItem.name?0.6:1}}>{statusItem.name}</button>);})}</div>
+                {f.status === "Перезвонить" && (
+                  <div style={{marginTop:4}}>
+                    <ContactDateField label="Дата перезвона" value={f.callbackDate || ""} onChange={(value)=>upd("callbackDate", value)} error={callbackDateError} placeholder="Выбрать дату" />
+                  </div>
+                )}
+                {callbackDateError && <div style={{fontSize:11,color:"#ffb36b",fontWeight:600}}>Укажи дату перезвона</div>}
               </div>
             </div>
 
-            {!!originalPlacement && (
+            {!!originalPlacement && scheduleChanged && (
               <div style={{padding:"10px 12px",borderRadius:10,background:scheduleChanged?"rgba(255,193,7,0.1)":"rgba(255,255,255,0.04)",border:scheduleChanged?"1px solid rgba(255,193,7,0.25)":"1px solid rgba(255,255,255,0.08)"}}>
                 <div style={{fontSize:10,color:"#8fa1ca",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Перемещение заявки</div>
                 <div style={{fontSize:11,color:"#b7c6e8",lineHeight:1.5}}>
@@ -2733,12 +2816,13 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
         </div>
       </div>
       {showDeleteConfirm && <ConfirmDialog title="Удалить заявку?" onConfirm={remove} onCancel={()=>setShowDeleteConfirm(false)} />}
+      {showCallbackDateDialog && <CallbackDateDialog value={callbackDateDraft} onChange={setCallbackDateDraft} onConfirm={confirmCallbackDate} onCancel={cancelCallbackDateDialog} error={callbackDatePromptAttempted && !callbackDateDraft} />}
       {showHistory&&<OrderHistoryPopup entries={historyEntries} onClose={()=>setShowHistory(false)} />}
       {showCityMap && (() => {
         const masterColorMap = {};
         const cityTechs = employees.filter(e => e.type === "technician" && e.city === f.city);
         cityTechs.forEach(e => { masterColorMap[e.name] = e.color; });
-        const cityOrders = Object.values(orders).filter(o => o.city === f.city && o.dateStr === f.dateStr && (o.address || (o.lat && o.lng)));
+        const cityOrders = Object.values(orders).filter(o => o.city === f.city && o.dateStr === f.dateStr && (o.address || (o.lat && o.lng)) && isOrderVisibleInSchedule(o));
         const orderKey = (o) => `${o.city}|${o.master}|${o.dateStr}|${o.timeIdx}`;
         const mapPins = cityOrders.map((o, i) => ({
           id: orderKey(o),
@@ -4035,6 +4119,7 @@ const OrdersExplorerView = ({
     if (counterId === "all") return true;
     if (counterId === "today") return row.dateStr === todayValue;
     if (counterId === "tomorrow") return row.dateStr === tomorrowValue;
+    if (counterId === "callback") return row.status === "Перезвонить";
     if (counterId === "confirmed") return row.status === "Подтверждён";
     if (counterId === "rescheduled") return row.status === "Перенесён";
     if (counterId === "completed") return row.status === "Выполнен";
@@ -4067,6 +4152,7 @@ const OrdersExplorerView = ({
     all: baseFilteredRows.length,
     today: baseFilteredRows.filter((row) => row.dateStr === todayValue).length,
     tomorrow: baseFilteredRows.filter((row) => row.dateStr === tomorrowValue).length,
+    callback: baseFilteredRows.filter((row) => row.status === "Перезвонить").length,
     confirmed: baseFilteredRows.filter((row) => row.status === "Подтверждён").length,
     rescheduled: baseFilteredRows.filter((row) => row.status === "Перенесён").length,
     completed: baseFilteredRows.filter((row) => row.status === "Выполнен").length,
@@ -4077,6 +4163,7 @@ const OrdersExplorerView = ({
     { id: "all", label: "Все", value: counters.all, color: "#55d8ff" },
     { id: "today", label: "Сегодня", value: counters.today, color: "#60c0ff" },
     { id: "tomorrow", label: "Завтра", value: counters.tomorrow, color: "#ffc857" },
+    { id: "callback", label: "Перезвонить", value: counters.callback, color: "#ff9f43" },
     { id: "confirmed", label: "Подтвержденные", value: counters.confirmed, color: "#9ee37d" },
     { id: "rescheduled", label: "Перенесенные", value: counters.rescheduled, color: "#ff8e8e" },
     { id: "completed", label: "Выполненные", value: counters.completed, color: "#b8e6a1" },
@@ -4167,7 +4254,9 @@ const OrdersExplorerView = ({
       <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-start",flexShrink:0}}>
         {counterTabs.map((tab) => (
           <button key={tab.id} type="button" onClick={() => setCounterFilter(tab.id)} style={{padding:"10px 14px",borderRadius:12,border:counterFilter===tab.id?"1px solid rgba(120,230,255,0.42)":"1px solid rgba(255,255,255,0.08)",background:counterFilter===tab.id?"rgba(80,220,255,0.16)":"rgba(255,255,255,0.04)",color:counterFilter===tab.id?"#dff7ff":"#9bb0d4",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:9}}>
-            <span style={{width:10,height:10,borderRadius:5,background:tab.color,boxShadow:"0 0 0 2px rgba(255,255,255,0.04)"}} />
+            {tab.id === "callback"
+              ? <span style={{fontSize:14,fontWeight:900,color:"#ff9f43",lineHeight:1}}>!</span>
+              : <span style={{width:10,height:10,borderRadius:5,background:tab.color,boxShadow:"0 0 0 2px rgba(255,255,255,0.04)"}} />}
             <span>{tab.label} {tab.value}</span>
           </button>
         ))}
@@ -5322,8 +5411,9 @@ export default function CRM() {
   }),[employees]);
   const today=dstr(new Date());
   const activeSlotLocks = useMemo(() => pruneExpiredSlotLocks(slotLocks), [slotLocks]);
-  const statusMap = useMemo(() => makeStatusMap(statuses), [statuses]);
-  const knownStatusNamesRef = useRef((INIT_STATUSES || []).map((status) => status.name));
+  const mergedStatuses = useMemo(() => ensureOrderStatuses(statuses), [statuses]);
+  const statusMap = useMemo(() => makeStatusMap(mergedStatuses), [mergedStatuses]);
+  const knownStatusNamesRef = useRef([]);
   const allOrders=useMemo(()=>{
     const scoped = Object.entries(orders).filter(([k])=>k.startsWith(activeCity+"|"));
     if (currentUser?.role === "technician") {
@@ -5333,16 +5423,18 @@ export default function CRM() {
   },[orders,activeCity,currentUser]);
   const todayOrders = useMemo(() => allOrders.filter(([, value]) => value.dateStr === today), [allOrders, today]);
   const todayStatusCards = useMemo(() => {
-    const visibleSet = new Set(visibleStatusNames?.length ? visibleStatusNames : (statuses || []).map((status)=>status.name));
-    return (statuses || []).filter((status) => visibleSet.has(status.name)).map((status) => ({
+    const visibleSet = new Set(visibleStatusNames?.length ? visibleStatusNames : mergedStatuses.map((status)=>status.name));
+    return mergedStatuses.filter((status) => visibleSet.has(status.name)).map((status) => ({
       ...status,
-      count: todayOrders.filter(([, value]) => value.status === status.name).length,
+      count: status.name === "Перезвонить"
+        ? allOrders.filter(([, value]) => isOrderCallbackDueOn(value, today)).length
+        : todayOrders.filter(([, value]) => value.status === status.name).length,
       meta: statusMeta(status.name, statusMap),
     }));
-  }, [statusMap, statuses, todayOrders, visibleStatusNames]);
+  }, [allOrders, mergedStatuses, statusMap, today, todayOrders, visibleStatusNames]);
   useEffect(() => {
     setVisibleStatusNames((prev) => {
-      const allNames = (statuses || []).map((status) => status.name);
+      const allNames = mergedStatuses.map((status) => status.name);
       if (!allNames.length) return prev;
       if (!prev?.length) {
         knownStatusNamesRef.current = allNames;
@@ -5354,7 +5446,7 @@ export default function CRM() {
       knownStatusNamesRef.current = allNames;
       return added.length ? [...keep, ...added] : keep;
     });
-  }, [statuses]);
+  }, [mergedStatuses]);
   const newOrderInitialData = useMemo(() => (
     contactToOrderDraft ? {
       phone: contactToOrderDraft.phone,
@@ -5594,6 +5686,7 @@ export default function CRM() {
           _subcategoryId: result?.savedRow?.subcategory_id || formData.serviceSubcategoryId || before?._subcategoryId || null,
           _createdAt: before?._createdAt || new Date().toISOString(),
           createdByName: before?.createdByName || currentUser?.name || "",
+          callbackDate: formData.status === "Перезвонить" ? (formData.callbackDate || "") : "",
           finalPrice: formData.finalPrice || before?.finalPrice || "",
           serviceDirectionId: formData.serviceDirectionId || before?.serviceDirectionId || "",
           serviceDirectionName: formData.serviceDirectionName || before?.serviceDirectionName || "",
@@ -5613,6 +5706,7 @@ export default function CRM() {
         const transferFields = new Set(["master", "dateStr", "timeIdx", "durationSlots"]);
         const detailKeys = [
           ["status","Статус"],
+          ["callbackDate","Дата перезвона"],
           ["master","Мастер"],
           ["dateStr","Дата"],
           ["timeIdx","Время"],
@@ -5674,6 +5768,7 @@ export default function CRM() {
       const transferFields = new Set(["master", "dateStr", "timeIdx", "durationSlots"]);
       const detailKeys = [
         ["status","Статус"],
+        ["callbackDate","Дата перезвона"],
         ["master","Мастер"],
         ["dateStr","Дата"],
         ["timeIdx","Время"],
@@ -6984,7 +7079,7 @@ export default function CRM() {
                     <div style={{position:"absolute",right:0,top:48,width:260,padding:12,borderRadius:14,background:"linear-gradient(180deg,#1d2140,#15182e)",border:"1px solid rgba(255,255,255,0.1)",boxShadow:"0 24px 60px rgba(0,0,0,0.42)",zIndex:1200,display:"flex",flexDirection:"column",gap:8}}>
                       <div style={{fontSize:11,fontWeight:800,color:"#dff7ff"}}>Статусы в верхней строке</div>
                       <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:280,overflowY:"auto"}}>
-                        {(statuses || []).map((statusItem) => {
+                        {mergedStatuses.map((statusItem) => {
                           const checked = visibleStatusNames.includes(statusItem.name);
                           return (
                             <label key={statusItem.name} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 8px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",cursor:"pointer"}}>

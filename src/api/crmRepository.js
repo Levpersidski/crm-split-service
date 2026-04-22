@@ -68,6 +68,7 @@ const formatHistoryValue = (field, value, related = {}) => {
   if (field === "dateStr") return formatShortDate(value);
   if (field === "timeIdx") return formatSelectedRange(Number(value), related.durationSlots);
   if (field === "durationSlots") return formatDurationLabel(value);
+  if (field === "callbackDate") return formatShortDate(value);
   return String(value);
 };
 const stripReturnCommentTag = (comment = "") => String(comment || "")
@@ -107,6 +108,14 @@ const writeLocalSnapshot = (snapshot) => {
 
 const mergeSnapshot = (defaults, stored) => {
   if (!stored || stored.version !== STORAGE_VERSION) return defaults;
+  const defaultStatuses = defaults.statuses || DEFAULT_STATUSES;
+  const storedStatuses = Array.isArray(stored.state?.statuses) ? stored.state.statuses : [];
+  const mergedStatuses = storedStatuses.length
+    ? [...storedStatuses, ...defaultStatuses.filter((status) => !storedStatuses.some((item) => item.name === status.name))]
+    : defaultStatuses;
+  const visibleStatusNames = Array.isArray(stored.state?.visibleStatusNames) && stored.state.visibleStatusNames.length
+    ? [...stored.state.visibleStatusNames, ...mergedStatuses.map((status) => status.name).filter((name) => !stored.state.visibleStatusNames.includes(name))]
+    : mergedStatuses.map((status) => status.name);
   return {
     ...defaults,
     ...stored.state,
@@ -119,7 +128,8 @@ const mergeSnapshot = (defaults, stored) => {
     slotLocks: pruneExpiredSlotLocksMap(stored.state?.slotLocks || defaults.slotLocks || {}),
     sources: stored.state?.sources || defaults.sources,
     services: stored.state?.services || defaults.services,
-    statuses: stored.state?.statuses || defaults.statuses,
+    visibleStatusNames,
+    statuses: mergedStatuses,
     contacts: stored.state?.contacts || defaults.contacts,
     contactStatuses: stored.state?.contactStatuses || defaults.contactStatuses,
     contactReasons: stored.state?.contactReasons || defaults.contactReasons,
@@ -221,6 +231,7 @@ const normalizeOrders = (rows, options = {}) => rows.reduce((acc, row) => {
     lat: row.lat,
     lng: row.lng,
     comment: row.comment || "",
+    callbackDate: row.callback_date || "",
     status: row.status || "Новый",
     technicianConfirmedAt: row.technician_confirmed_at || null,
     technicianConfirmedById: row.technician_confirmed_by || null,
@@ -330,6 +341,7 @@ const normalizeHistory = (rows, orders) => rows.reduce((acc, row) => {
       Дата: "dateStr",
       Время: "timeIdx",
       Длительность: "durationSlots",
+      "Дата перезвона": "callbackDate",
       Стоимость: "price",
       "Окончательная стоимость": "finalPrice",
       Адрес: "address",
@@ -350,6 +362,21 @@ const normalizeHistory = (rows, orders) => rows.reduce((acc, row) => {
   return acc;
 }, {});
 
+const applyOrderHistoryMetadata = (orders, rows = []) => {
+  const next = Object.fromEntries(Object.entries(orders || {}).map(([key, value]) => [key, { ...value }]));
+  const keyById = new Map(Object.entries(next).map(([key, value]) => [value?._id, key]).filter(([id]) => Boolean(id)));
+  [...(rows || [])]
+    .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")))
+    .forEach((row) => {
+      const key = keyById.get(row.order_id);
+      if (!key || !row.field_name) return;
+      if (row.field_name === "Дата перезвона") {
+        next[key].callbackDate = row.new_value || "";
+      }
+    });
+  return next;
+};
+
 const normalizeServices = (rows) => (rows || []).map((row) => ({
   id: row.id,
   parentId: row.parent_id || null,
@@ -364,13 +391,19 @@ const normalizeServices = (rows) => (rows || []).map((row) => ({
 
 const normalizeStatuses = (rows) => {
   if (!rows?.length) return DEFAULT_STATUSES;
-  return rows.map((row, index) => ({
+  const mapped = rows.map((row, index) => ({
     id: row.id || null,
     name: row.name,
     shortLabel: row.short_label || row.shortLabel || row.name,
     tone: row.tone_key || row.tone || "sky",
     sortOrder: Number(row.sort_order ?? row.sortOrder ?? index),
-  })).sort((a, b) => {
+  }));
+  DEFAULT_STATUSES.forEach((defaultStatus) => {
+    if (!mapped.some((item) => item.name === defaultStatus.name)) {
+      mapped.push(defaultStatus);
+    }
+  });
+  return mapped.sort((a, b) => {
     if ((a.sortOrder || 0) !== (b.sortOrder || 0)) return (a.sortOrder || 0) - (b.sortOrder || 0);
     return a.name.localeCompare(b.name, "ru");
   });
@@ -580,6 +613,7 @@ export const loadCrmState = async (defaults, session) => {
       select: "id,order_id,action,field_name,old_value,new_value,meta,created_at,actor:actor_employee_id(name)",
       filters: { order: "created_at.desc" },
     });
+    const ordersWithHistoryMeta = applyOrderHistoryMetadata(orders, historyRaw || []);
     let services = stored?.state?.services || defaults.services;
     let statuses = stored?.state?.statuses || defaults.statuses || DEFAULT_STATUSES;
     let contactStatuses = stored?.state?.contactStatuses || defaults.contactStatuses || DEFAULT_CONTACT_STATUSES;
@@ -651,6 +685,9 @@ export const loadCrmState = async (defaults, session) => {
     const preferredActiveCity = storedState.activeCity && normalizedCities[storedState.activeCity]
       ? storedState.activeCity
       : (defaults.activeCity && normalizedCities[defaults.activeCity] ? defaults.activeCity : (Object.keys(normalizedCities)[0] || "Краснодар"));
+    const mergedVisibleStatusNames = Array.isArray(storedState.visibleStatusNames) && storedState.visibleStatusNames.length
+      ? [...storedState.visibleStatusNames, ...(statuses || DEFAULT_STATUSES).map((status) => status.name).filter((name) => !storedState.visibleStatusNames.includes(name))]
+      : (statuses || DEFAULT_STATUSES).map((status) => status.name);
     return {
       ...defaults,
       activeCity: preferredActiveCity,
@@ -661,13 +698,11 @@ export const loadCrmState = async (defaults, session) => {
       showDataView: Boolean(storedState.showDataView),
       showContactsView: Boolean(storedState.showContactsView),
       showOrdersExplorerView: Boolean(storedState.showOrdersExplorerView),
-      visibleStatusNames: Array.isArray(storedState.visibleStatusNames) && storedState.visibleStatusNames.length
-        ? storedState.visibleStatusNames
-        : (statuses || DEFAULT_STATUSES).map((status) => status.name),
+      visibleStatusNames: mergedVisibleStatusNames,
       cities: normalizedCities,
       employees: mergeEmployeeSchedules(normalizeEmployees(employeesRaw || [], privateMap, employeeScopesMap), storedState.employees || []),
-      orders,
-      orderHistory: normalizeHistory(historyRaw || [], orders),
+      orders: ordersWithHistoryMeta,
+      orderHistory: normalizeHistory(historyRaw || [], ordersWithHistoryMeta),
       dayOffs: normalizeDayOffs(dayOffsRaw || []),
       busySlots: normalizeBusySlots(await restSelect("busy_slots", {
         token,
@@ -771,6 +806,9 @@ export const upsertOrder = async ({ formData, existingOrder, snapshot, session }
   const cityId = findCityId(snapshot.cities, formData.city);
   const technician = findEmployee(snapshot.employees, { name: formData.master, city: formData.city, type: "technician" });
   if (!cityId || !technician?.id) throw new Error("Не удалось определить город или мастера");
+  if (formData.status === "Перезвонить" && !String(formData.callbackDate || "").trim()) {
+    throw new Error("Для статуса «Перезвонить» нужно указать дату перезвона.");
+  }
   ensureHourlyPlacement({ formData, existingOrder, snapshot });
   const isTechnicianActor = snapshot.currentUser?.role === "technician";
   const isAdminActor = snapshot.currentUser?.role === "admin";
@@ -819,6 +857,7 @@ export const upsertOrder = async ({ formData, existingOrder, snapshot, session }
     officeAttentionRequired = true;
   }
   const sourceId = await findSourceId(snapshot.sources, formData.source, token, existingOrder?._sourceId || null, existingOrder?.source || "");
+  const callbackDate = formData.status === "Перезвонить" ? String(formData.callbackDate || "").trim() : "";
   const payload = {
     city_id: cityId,
     technician_id: technician.id,
@@ -877,6 +916,9 @@ export const upsertOrder = async ({ formData, existingOrder, snapshot, session }
         : await restInsert("orders", fallbackPayload, { token });
     } else {
     const message = `${error?.message || ""}`.toLowerCase();
+    if (message.includes("orders_status_check") || message.includes("status")) {
+      throw new Error("Для новых статусов заказа нужно выполнить SQL-файл supabase_status_catalog.sql в Supabase SQL Editor.");
+    }
     if (message.includes("duplicate key") || message.includes("orders_technician_id_order_date_time_slot_key")) {
       throw new Error("Это окно уже занято другим заказом. Выбери свободное время.");
     }
@@ -908,6 +950,17 @@ export const upsertOrder = async ({ formData, existingOrder, snapshot, session }
       action: "Создан заказ",
       meta: { details: `Клиент: ${formData.name || "—"}, адрес: ${formData.address || "—"}` },
     });
+    if (callbackDate) {
+      historyRows.push({
+        order_id: savedRow.id,
+        actor_employee_id: snapshot.currentUser?.id || null,
+        action: "Изменение заказа",
+        field_name: "Дата перезвона",
+        old_value: "",
+        new_value: callbackDate,
+        meta: {},
+      });
+    }
   } else {
     const transferFields = new Set(["master", "dateStr", "timeIdx", "durationSlots"]);
     const transferChanged = (
@@ -958,6 +1011,7 @@ export const upsertOrder = async ({ formData, existingOrder, snapshot, session }
     }
     [
       ["status", "Статус"],
+      ["callbackDate", "Дата перезвона"],
       ["master", "Мастер"],
       ["dateStr", "Дата"],
       ["timeIdx", "Время"],

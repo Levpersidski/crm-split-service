@@ -4,7 +4,9 @@
       "Bash(node --check CRM_Konditsionery_v6.jsx)",
       "mcp__Claude_Preview__preview_start",
       "Bash(npx vite:*)",
-      "Bash(ipconfig getifaddr:*)"
+      "Bash(ipconfig getifaddr:*)",
+      "Bash(sed -n '4400,4550p' \"/Users/swift/Desktop/CRM КОПІЇ/CRM Кодекс карты Клод/CRM_Konditsionery_v6.jsx\")",
+      "Bash(sed -n '4400,4550p' \"/Users/swift/Desktop/CRM КОПИИ/CRM Кодекс карты Клод/CRM_Konditsionery_v6.jsx\")"
     ]
   }
 }
