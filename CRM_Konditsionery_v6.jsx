@@ -6,6 +6,7 @@ import {
   createSource,
   createStatus,
   deleteCity as deleteCityRemote,
+  deleteContact,
   deleteContactReason,
   deleteContactStatus,
   deleteEmployee,
@@ -862,6 +863,16 @@ const MultiPinMapModal = ({ pins = [], homePins = [], title = "Карта зак
   const mapInstanceRef = useRef(null);
   const placemarksRef = useRef([]);
   const didInitialFitRef = useRef(false);
+  const slotsScrollRef = useRef(null);
+  const [slotsScroll, setSlotsScroll] = useState({ hasOverflow: false, atBottom: true });
+  const recomputeSlotsScroll = useCallback(() => {
+    const el = slotsScrollRef.current;
+    if (!el) { setSlotsScroll((prev) => (prev.hasOverflow || !prev.atBottom) ? { hasOverflow: false, atBottom: true } : prev); return; }
+    const hasOverflow = el.scrollHeight - el.clientHeight > 1;
+    const atBottom = !hasOverflow || Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) < 2;
+    setSlotsScroll((prev) => (prev.hasOverflow === hasOverflow && prev.atBottom === atBottom) ? prev : { hasOverflow, atBottom });
+  }, []);
+  useEffect(() => { recomputeSlotsScroll(); }, [recomputeSlotsScroll, slotRows?.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1068,28 +1079,42 @@ const MultiPinMapModal = ({ pins = [], homePins = [], title = "Карта зак
         @keyframes crmPinShadow{0%,100%{opacity:0.95;transform:translateX(-50%) scale(1)}50%{opacity:0.55;transform:translateX(-50%) scale(0.55)}}
         @keyframes crmPinHalo{0%,100%{opacity:0.85;transform:translate(-50%,50%) scale(1)}50%{opacity:0.25;transform:translate(-50%,50%) scale(1.9)}}
         .crm-pin-bounce{animation:crmPinBounce 1.3s ease-in-out infinite;transform-origin:50% 100%}
+        @keyframes crmSlotArrow{0%,100%{transform:translateY(0);opacity:0.7}50%{transform:translateY(3px);opacity:1}}
       `}</style>
       <div onClick={onClose} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)"}} />
-      <div style={{position:"relative",width:1440,maxWidth:"99vw",borderRadius:14,overflow:"hidden",boxShadow:"0 25px 60px rgba(0,0,0,0.6)",border:"1px solid rgba(255,255,255,0.1)",animation:"popIn 0.2s cubic-bezier(0.34,1.56,0.64,1)",background:"#1a1a2e"}}>
+      <div style={{position:"relative",width:1440,maxWidth:"95vw",height:"80vh",maxHeight:"80vh",display:"flex",flexDirection:"column",borderRadius:14,overflow:"hidden",boxShadow:"0 25px 60px rgba(0,0,0,0.6)",border:"1px solid rgba(255,255,255,0.1)",animation:"popIn 0.2s cubic-bezier(0.34,1.56,0.64,1)",background:"#1a1a2e"}}>
         <div style={{background:"linear-gradient(135deg,#16213e,#0f3460)",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{color:"#fff",fontWeight:700,fontSize:13}}>{title} <span style={{fontSize:10,color:"#8892b0",fontWeight:400}}>({allPins.length} {allPins.length === 1 ? "точка" : "точек"}{geocoding ? ", загружаю..." : ""})</span></span>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.1)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
         {geocoding && <div style={{padding:"6px 16px",background:"rgba(100,255,218,0.08)",fontSize:11,color:"#64ffda",textAlign:"center"}}>⏳ Определяю координаты по адресам заказов...</div>}
-        <div style={{position:"relative",background:"#1a1a2e"}}>
-          <div ref={mapContainerRef} style={{width:"100%",height:760,background:"#0a1a2e"}} />
+        <div style={{position:"relative",background:"#1a1a2e",flex:"1 1 auto",minHeight:0,display:"flex"}}>
+          <div ref={mapContainerRef} style={{width:"100%",height:"100%",minHeight:0,background:"#0a1a2e"}} />
           {!mapReady && !mapError && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#64ffda",fontSize:12,pointerEvents:"none"}}>⏳ Загрузка карты…</div>}
           {mapError && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#ff7a7a",fontSize:12,padding:20,textAlign:"center"}}>Не удалось загрузить карту: {mapError}</div>}
         </div>
         {slotRows?.length ? (
-          <div style={{padding:"12px 16px 16px",background:"#1a1a2e"}}>
-            <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Свободные часы</div>
-            <div style={{background:"rgba(255,255,255,0.03)",borderRadius:12,border:"1px solid rgba(255,255,255,0.06)",overflow:"auto",maxHeight:280}}>
+          <div style={{padding:"10px 16px 14px",background:"#1a1a2e",flex:"0 0 auto",overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+              <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1}}>Свободные часы</div>
+              <span style={{fontSize:10,color:"#64ffda",fontWeight:700,letterSpacing:0.3}}>Кол-во мастеров: {slotRows.length}</span>
+            </div>
+            {(() => {
+              const rowsCount = slotRows.length;
+              const visibleRows = Math.min(2, Math.max(1, rowsCount));
+              const rowPx = 50;
+              const headerPx = 34;
+              const peekPx = rowsCount > visibleRows ? 28 : 4;
+              const slotsMaxHeight = headerPx + visibleRows * rowPx + peekPx;
+              const showScrollHint = slotsScroll.hasOverflow && !slotsScroll.atBottom;
+              return (
+            <div style={{position:"relative"}}>
+            <div ref={slotsScrollRef} onScroll={recomputeSlotsScroll} style={{background:"rgba(255,255,255,0.03)",borderRadius:12,border:"1px solid rgba(255,255,255,0.06)",overflow:"auto",maxHeight:slotsMaxHeight}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
                 <thead>
                   <tr>
-                    <th style={{padding:"10px 10px",color:"#5a6a8a",textAlign:"left",position:"sticky",left:0,background:"#1a1a2e",borderBottom:"1px solid rgba(255,255,255,0.06)",width:116,minWidth:116,fontSize:11}}>Мастер</th>
-                    {TIMES.map((t)=><th key={t} style={{padding:"10px 4px",color:"#64ffda",textAlign:"center",borderBottom:"1px solid rgba(255,255,255,0.06)",fontFamily:"monospace",fontSize:10,fontWeight:800,minWidth:78}}>{t}</th>)}
+                    <th style={{padding:"10px 10px",color:"#5a6a8a",textAlign:"left",position:"sticky",left:0,top:0,zIndex:3,background:"#1a1a2e",borderBottom:"1px solid rgba(255,255,255,0.06)",width:116,minWidth:116,fontSize:11}}>Мастер</th>
+                    {TIMES.map((t)=><th key={t} style={{padding:"10px 4px",color:"#64ffda",textAlign:"center",position:"sticky",top:0,zIndex:2,background:"#1a1a2e",borderBottom:"1px solid rgba(255,255,255,0.06)",fontFamily:"monospace",fontSize:10,fontWeight:800,minWidth:78}}>{t}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -1134,6 +1159,14 @@ const MultiPinMapModal = ({ pins = [], homePins = [], title = "Карта зак
                 </tbody>
               </table>
             </div>
+            {showScrollHint && (
+              <div style={{position:"absolute",left:0,right:0,bottom:0,height:30,pointerEvents:"none",background:"linear-gradient(to top, rgba(26,26,46,0.96) 10%, rgba(26,26,46,0))",borderBottomLeftRadius:12,borderBottomRightRadius:12,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:3}}>
+                <span style={{fontSize:16,color:"#64ffda",fontWeight:900,lineHeight:1,animation:"crmSlotArrow 1.2s ease-in-out infinite",textShadow:"0 0 8px rgba(100,255,218,0.5)"}}>⌄</span>
+              </div>
+            )}
+            </div>
+              );
+            })()}
           </div>
         ) : allPins.length > 0 && (
           <div ref={listRef} style={{padding:"8px 16px",background:"#1a1a2e",maxHeight:160,overflowY:"auto"}}>
@@ -1371,6 +1404,49 @@ const DatePickerField = ({label,value,onChange,disabled}) => (
         style={{width:"100%",height:38,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"0 40px 0 12px",color:disabled?"#8892b0":"#e6f1ff",fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",boxShadow:"none",appearance:"none",WebkitAppearance:"none",MozAppearance:"none"}}
       />
       <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#64ffda",fontSize:14,pointerEvents:"none"}}>🗓</span>
+    </div>
+  </div>
+);
+
+const ContactDateField = ({ label, value, onChange, error = false, placeholder = "Выбрать дату" }) => (
+  <div>
+    <div style={{fontSize:10,color:error?"#ff9ea8":"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>{label}</div>
+    <div style={{position:"relative"}}>
+      <div
+        style={{
+          width:"100%",
+          height:38,
+          background:error?"rgba(255,107,107,0.08)":"rgba(255,255,255,0.06)",
+          border:error?"1px solid rgba(255,107,107,0.45)":"1px solid rgba(255,255,255,0.1)",
+          borderRadius:10,
+          padding:"0 34px 0 10px",
+          color:value ? "#e6f1ff" : "#5a6a8a",
+          fontSize:12,
+          fontFamily:"inherit",
+          boxSizing:"border-box",
+          display:"flex",
+          alignItems:"center",
+          overflow:"hidden",
+          whiteSpace:"nowrap",
+          textOverflow:"ellipsis",
+        }}
+      >
+        {value ? formatDateRu(value) : placeholder}
+      </div>
+      <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:error?"#ff9ea8":"#64ffda",fontSize:14,pointerEvents:"none"}}>🗓</span>
+      <input
+        type="date"
+        value={toDateInputValue(value)}
+        onChange={(e)=>onChange(e.target.value)}
+        style={{
+          position:"absolute",
+          inset:0,
+          opacity:0,
+          width:"100%",
+          height:"100%",
+          cursor:"pointer",
+        }}
+      />
     </div>
   </div>
 );
@@ -1987,6 +2063,8 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
   const [slotSelectionWarning, setSlotSelectionWarning] = useState("");
   const datePopoverRef = useRef(null);
   const dateButtonRef = useRef(null);
+  const slotsScrollRef = useRef(null);
+  const [slotsScrollState, setSlotsScrollState] = useState({ hasOverflow: false, atBottom: true });
   const serviceIndex = useMemo(() => buildServiceIndex(services || []), [services]);
   const directions = useMemo(() => getServiceChildren(serviceIndex, null, "direction"), [serviceIndex]);
   const subcategories = useMemo(() => (
@@ -2031,7 +2109,17 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
     setSaveAttempted(false);
     setPreferredDurationSlots(Math.max(1, Number(nextState.durationSlots || NEW_ORDER_DURATION_SLOTS)));
     setSlotSelectionWarning("");
-  },[currentRole, fixedSlot, formSeed, preferredStatus, serviceIndex]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[currentRole, fixedSlot, formSeed, preferredStatus]);
+  // Re-normalize serviceItems without clobbering other fields when catalog updates
+  useEffect(() => {
+    setF(prev => {
+      if (!prev?.serviceItems?.length) return prev;
+      const next = normalizeServiceItems(prev.serviceItems, serviceIndex);
+      if (JSON.stringify(next) === JSON.stringify(prev.serviceItems)) return prev;
+      return { ...prev, serviceItems: next };
+    });
+  }, [serviceIndex]);
   useEffect(() => {
     if (!slotSelectionWarning) return undefined;
     const timerId = window.setTimeout(() => setSlotSelectionWarning(""), 2200);
@@ -2291,43 +2379,100 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
   const applySlotSelection = (masterName, slotIdx) => {
     if (readOnly) return;
     const masterRow = freeSlots.find((item) => item.master.name === masterName);
-    const duration = Math.max(1, Number((f.timeIdx === "" || f.timeIdx == null ? preferredDurationSlots : f.durationSlots) || 1));
-    const canPlaceFrom = (startIdx) => {
-      const endIdx = startIdx + duration - 1;
-      if (endIdx >= TIMES.length) return false;
-      return Array.from({ length: duration }, (_, idx) => startIdx + idx)
-        .every((idx) => masterRow?.slots?.[idx]?.free || currentRange.includes(idx));
-    };
-    if (slotIdx + duration - 1 >= TIMES.length) {
-      setSlotSelectionWarning(`Заявка занимает ${formatDurationLabel(duration)}. Выбери слот раньше.`);
-      return;
-    }
+    const isFreeCell = (idx) => !!masterRow?.slots?.[idx]?.free;
+
+    // No selection yet OR different master → start fresh with 1 hour on this cell
     if (f.master !== masterName || f.timeIdx === "" || f.timeIdx == null) {
-      if (canPlaceFrom(slotIdx)) {
-        setPreferredDurationSlots(duration);
-        setSlotSelectionWarning("");
-        setF((prev) => ({ ...prev, master: masterName, timeIdx: slotIdx, durationSlots: duration }));
+      if (!isFreeCell(slotIdx)) {
+        setSlotSelectionWarning("Эта ячейка недоступна.");
         return;
       }
-      setSlotSelectionWarning(`Для заявки нужно ${formatDurationLabel(duration)} подряд.`);
+      setPreferredDurationSlots(1);
+      setSlotSelectionWarning("");
+      setF((prev) => ({ ...prev, master: masterName, timeIdx: slotIdx, durationSlots: 1 }));
       return;
     }
+
     const start = Number(f.timeIdx);
+    const duration = Math.max(1, Number(f.durationSlots || 1));
     const end = start + duration - 1;
-    if (slotIdx >= start && slotIdx <= end) {
-      setPreferredDurationSlots(duration);
+
+    // Click on first selected cell → shrink from start (or deselect if duration was 1)
+    if (slotIdx === start) {
+      if (duration === 1) {
+        setSlotSelectionWarning("");
+        setF((prev) => ({ ...prev, timeIdx: "", durationSlots: 1 }));
+        setPreferredDurationSlots(1);
+        return;
+      }
       setSlotSelectionWarning("");
-      setF((prev) => ({ ...prev, timeIdx: "", durationSlots: duration }));
+      setF((prev) => ({ ...prev, timeIdx: start + 1, durationSlots: duration - 1 }));
+      setPreferredDurationSlots(duration - 1);
       return;
     }
-    if (canPlaceFrom(slotIdx)) {
-      setPreferredDurationSlots(duration);
+
+    // Click on last selected cell → shrink from end
+    if (slotIdx === end) {
       setSlotSelectionWarning("");
-      setF((prev) => ({ ...prev, master: masterName, timeIdx: slotIdx, durationSlots: duration }));
+      setF((prev) => ({ ...prev, durationSlots: duration - 1 }));
+      setPreferredDurationSlots(duration - 1);
       return;
     }
-    setSlotSelectionWarning(`Для заявки нужно ${formatDurationLabel(duration)} подряд.`);
+
+    // Click inside middle of selection → warn, do nothing
+    if (slotIdx > start && slotIdx < end) {
+      setSlotSelectionWarning("Снимай часы только с краёв выделения.");
+      return;
+    }
+
+    // Click immediately left of selection → extend left by 1 hour
+    if (slotIdx === start - 1) {
+      if (!isFreeCell(slotIdx)) {
+        setSlotSelectionWarning("Ячейка недоступна.");
+        return;
+      }
+      setSlotSelectionWarning("");
+      setF((prev) => ({ ...prev, timeIdx: slotIdx, durationSlots: duration + 1 }));
+      setPreferredDurationSlots(duration + 1);
+      return;
+    }
+
+    // Click immediately right of selection → extend right by 1 hour
+    if (slotIdx === end + 1) {
+      if (slotIdx >= TIMES.length) {
+        setSlotSelectionWarning("Окно выходит за рабочий день.");
+        return;
+      }
+      if (!isFreeCell(slotIdx)) {
+        setSlotSelectionWarning("Ячейка недоступна.");
+        return;
+      }
+      setSlotSelectionWarning("");
+      setF((prev) => ({ ...prev, durationSlots: duration + 1 }));
+      setPreferredDurationSlots(duration + 1);
+      return;
+    }
+
+    // Click far from selection → restart with 1 hour on this cell
+    if (!isFreeCell(slotIdx)) {
+      setSlotSelectionWarning("Эта ячейка недоступна.");
+      return;
+    }
+    setSlotSelectionWarning("");
+    setF((prev) => ({ ...prev, master: masterName, timeIdx: slotIdx, durationSlots: 1 }));
+    setPreferredDurationSlots(1);
   };
+
+  const recomputeSlotsScrollState = useCallback(() => {
+    const el = slotsScrollRef.current;
+    if (!el) { setSlotsScrollState((prev) => (prev.hasOverflow || !prev.atBottom) ? { hasOverflow: false, atBottom: true } : prev); return; }
+    const hasOverflow = el.scrollHeight - el.clientHeight > 1;
+    const atBottom = !hasOverflow || Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) < 2;
+    setSlotsScrollState((prev) => (prev.hasOverflow === hasOverflow && prev.atBottom === atBottom) ? prev : { hasOverflow, atBottom });
+  }, []);
+  useEffect(() => {
+    recomputeSlotsScrollState();
+  }, [recomputeSlotsScrollState, freeSlots.length, f.dateStr, f.city]);
 
   const requiredOrderErrors = useMemo(() => ({
     phone: normalizePhoneDigits(f.phone).length < 10,
@@ -2510,27 +2655,49 @@ const OrderForm = ({data,initialData,isNew,onSave,onClose,onDelete,sources,onAdd
               {(!f.serviceDirectionId || !f.serviceSubcategoryId) && <div style={{fontSize:11,color:"#7f92ba"}}>Сначала выбери направление и подуслугу. Пока они не выбраны, мастера и свободные часы скрыты.</div>}
               {f.serviceDirectionId && f.serviceSubcategoryId && !cityMasters.length && <div style={{fontSize:11,color:"#ffb35a"}}>В городе «{f.city || "—"}» пока нет мастеров с этим навыком.</div>}
               {f.serviceDirectionId&&f.serviceSubcategoryId&&f.city&&f.dateStr&&cityMasters.length>0&&(<div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                  <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1}}>Свободные часы</div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,gap:10,flexWrap:"wrap"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                    <div style={{fontSize:10,color:"#8892b0",textTransform:"uppercase",letterSpacing:1}}>Свободные часы</div>
+                    <span style={{fontSize:10,color:"#64ffda",fontWeight:700,letterSpacing:0.3}}>Кол-во мастеров: {freeSlots.length}</span>
+                  </div>
                   <button onClick={()=>setShowCityMap(true)} style={{padding:"3px 10px",borderRadius:6,border:"1px solid rgba(100,255,218,0.25)",background:"rgba(100,255,218,0.1)",color:"#64ffda",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>🗺 Показать на карте</button>
                 </div>
-                <div style={{background:"rgba(255,255,255,0.03)",borderRadius:10,border:"1px solid rgba(255,255,255,0.06)",overflow:"auto",maxHeight:"45vh"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}><thead><tr>
-                    <th style={{padding:"8px 8px",color:"#5a6a8a",textAlign:"left",position:"sticky",left:0,background:"#1a1a2e",borderBottom:"1px solid rgba(255,255,255,0.06)",width:"14%",minWidth:76,maxWidth:84,fontSize:11}}>Мастер</th>
-                    {TIMES.map(t=><th key={t} style={{padding:"8px 4px",color:"#64ffda",textAlign:"center",borderBottom:"1px solid rgba(255,255,255,0.06)",fontFamily:"monospace",fontSize:10,fontWeight:800,minWidth:52}}>{t}</th>)}
-                  </tr></thead><tbody>
-                    {freeSlots.map(({master:m,slots})=>(<tr key={m.name}>
-                      <td style={{padding:"8px 8px",color:"#ccd6f6",fontWeight:600,whiteSpace:"nowrap",position:"sticky",left:0,background:"#1a1a2e",width:"14%",minWidth:76,maxWidth:84,fontSize:10,overflow:"hidden",textOverflow:"ellipsis"}}><span style={{display:"inline-block",width:8,height:8,borderRadius:5,background:m.color,marginRight:6}} />{m.name}</td>
-                      {slots.map(s=>(<td key={s.ti} style={{padding:2,textAlign:"center"}}>
-                        {s.off?<div style={{padding:"8px 4px",borderRadius:6,background:"rgba(255,255,255,0.03)",color:"#555",fontSize:9,minWidth:48}}>вых</div>
-                        :s.order?<div onClick={()=>{if(s.order && (s.order.address || (s.order.lat && s.order.lng))) setSlotMapOrder(s.order);}} style={{padding:"8px 4px",borderRadius:6,background:s.busy?"rgba(255,193,7,0.12)":"rgba(255,82,82,0.1)",color:s.busy?"#ffd166":"#ef5350",fontSize:9,minWidth:48,cursor:(s.order?.address||s.order?.lat)?"pointer":"default"}}>{s.busy?"занят":"занят"}</div>
-                        :s.notWorking?<div style={{padding:"8px 4px",borderRadius:6,background:"repeating-linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 5px, rgba(255,255,255,0.06) 5px, rgba(255,255,255,0.06) 10px)",border:"1px solid rgba(255,255,255,0.08)",color:"#6c748f",fontSize:8.5,minWidth:48,fontWeight:700}}>не раб</div>
-                        :s.free|| (f.master===m.name && currentRange.includes(s.ti)) ?<div onClick={()=>applySlotSelection(m.name,s.ti)} style={{padding:"8px 4px",borderRadius:6,background:f.master===m.name&&currentRange.includes(s.ti)?"rgba(100,255,218,0.3)":"rgba(100,255,218,0.06)",border:f.master===m.name&&currentRange.includes(s.ti)?"2px solid #64ffda":"1px solid rgba(100,255,218,0.15)",color:"#64ffda",cursor:readOnly?"default":"pointer",fontWeight:f.master===m.name&&currentRange.includes(s.ti)?800:500,fontSize:11,minWidth:48}}>{f.master===m.name&&currentRange.includes(s.ti)?"✓":"✓"}</div>
-                        :s.lock && !s.ownLock ?<div style={{padding:"5px 4px",borderRadius:6,background:"rgba(255,82,82,0.12)",border:"1px solid rgba(255,82,82,0.4)",color:"#ff6f7d",fontSize:8,minWidth:48,lineHeight:1.2}}><div style={{fontWeight:800}}>оформ.</div><div style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.lock.employeeName || "Сотр."}</div></div>
-                        :<div style={{padding:"8px 4px",borderRadius:6,background:s.busy?"rgba(255,193,7,0.12)":"rgba(255,82,82,0.1)",color:s.busy?"#ffd166":"#ef5350",fontSize:9,minWidth:48}}>{s.busy?"занят":"занят"}</div>}
-                      </td>))}
-                    </tr>))}
-                  </tbody></table></div>
+                {(() => {
+                  const rowsCount = freeSlots.length;
+                  const visibleRows = Math.min(3, Math.max(1, rowsCount));
+                  const rowPx = 44;
+                  const headerPx = 32;
+                  const slotsMaxHeight = headerPx + visibleRows * rowPx + 4;
+                  const showScrollHint = slotsScrollState.hasOverflow && !slotsScrollState.atBottom;
+                  return (
+                    <div style={{position:"relative"}}>
+                      <style>{`@keyframes crmSlotArrow{0%,100%{transform:translateY(0);opacity:0.7}50%{transform:translateY(3px);opacity:1}}`}</style>
+                      <div ref={slotsScrollRef} onScroll={recomputeSlotsScrollState} style={{background:"rgba(255,255,255,0.03)",borderRadius:10,border:"1px solid rgba(255,255,255,0.06)",overflow:"auto",maxHeight:slotsMaxHeight}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}><thead><tr>
+                          <th style={{padding:"8px 8px",color:"#5a6a8a",textAlign:"left",position:"sticky",left:0,top:0,zIndex:3,background:"#1a1a2e",borderBottom:"1px solid rgba(255,255,255,0.06)",width:"14%",minWidth:76,maxWidth:84,fontSize:11}}>Мастер</th>
+                          {TIMES.map(t=><th key={t} style={{padding:"8px 4px",color:"#64ffda",textAlign:"center",position:"sticky",top:0,zIndex:2,background:"#1a1a2e",borderBottom:"1px solid rgba(255,255,255,0.06)",fontFamily:"monospace",fontSize:10,fontWeight:800,minWidth:52}}>{t}</th>)}
+                        </tr></thead><tbody>
+                          {freeSlots.map(({master:m,slots})=>(<tr key={m.name}>
+                            <td style={{padding:"8px 8px",color:"#ccd6f6",fontWeight:600,whiteSpace:"nowrap",position:"sticky",left:0,background:"#1a1a2e",width:"14%",minWidth:76,maxWidth:84,fontSize:10,overflow:"hidden",textOverflow:"ellipsis"}}><span style={{display:"inline-block",width:8,height:8,borderRadius:5,background:m.color,marginRight:6}} />{m.name}</td>
+                            {slots.map(s=>(<td key={s.ti} style={{padding:2,textAlign:"center"}}>
+                              {s.off?<div style={{padding:"8px 4px",borderRadius:6,background:"rgba(255,255,255,0.03)",color:"#555",fontSize:9,minWidth:48}}>вых</div>
+                              :s.order?<div onClick={()=>{if(s.order && (s.order.address || (s.order.lat && s.order.lng))) setSlotMapOrder(s.order);}} style={{padding:"8px 4px",borderRadius:6,background:s.busy?"rgba(255,193,7,0.12)":"rgba(255,82,82,0.1)",color:s.busy?"#ffd166":"#ef5350",fontSize:9,minWidth:48,cursor:(s.order?.address||s.order?.lat)?"pointer":"default"}}>{s.busy?"занят":"занят"}</div>
+                              :s.notWorking?<div style={{padding:"8px 4px",borderRadius:6,background:"repeating-linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 5px, rgba(255,255,255,0.06) 5px, rgba(255,255,255,0.06) 10px)",border:"1px solid rgba(255,255,255,0.08)",color:"#6c748f",fontSize:8.5,minWidth:48,fontWeight:700}}>не раб</div>
+                              :s.free|| (f.master===m.name && currentRange.includes(s.ti)) ?<div onClick={()=>applySlotSelection(m.name,s.ti)} style={{padding:"8px 4px",borderRadius:6,background:f.master===m.name&&currentRange.includes(s.ti)?"rgba(100,255,218,0.3)":"rgba(100,255,218,0.06)",border:f.master===m.name&&currentRange.includes(s.ti)?"2px solid #64ffda":"1px solid rgba(100,255,218,0.15)",color:"#64ffda",cursor:readOnly?"default":"pointer",fontWeight:f.master===m.name&&currentRange.includes(s.ti)?800:500,fontSize:11,minWidth:48}}>{f.master===m.name&&currentRange.includes(s.ti)?"✓":"✓"}</div>
+                              :s.lock && !s.ownLock ?<div style={{padding:"5px 4px",borderRadius:6,background:"rgba(255,82,82,0.12)",border:"1px solid rgba(255,82,82,0.4)",color:"#ff6f7d",fontSize:8,minWidth:48,lineHeight:1.2}}><div style={{fontWeight:800}}>оформ.</div><div style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.lock.employeeName || "Сотр."}</div></div>
+                              :<div style={{padding:"8px 4px",borderRadius:6,background:s.busy?"rgba(255,193,7,0.12)":"rgba(255,82,82,0.1)",color:s.busy?"#ffd166":"#ef5350",fontSize:9,minWidth:48}}>{s.busy?"занят":"занят"}</div>}
+                            </td>))}
+                          </tr>))}
+                        </tbody></table>
+                      </div>
+                      {showScrollHint && (
+                        <div style={{position:"absolute",left:0,right:0,bottom:0,height:28,pointerEvents:"none",background:"linear-gradient(to top, rgba(26,26,46,0.96) 10%, rgba(26,26,46,0))",borderBottomLeftRadius:10,borderBottomRightRadius:10,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:2}}>
+                          <span style={{fontSize:16,color:"#64ffda",fontWeight:900,lineHeight:1,animation:"crmSlotArrow 1.2s ease-in-out infinite",textShadow:"0 0 8px rgba(100,255,218,0.5)"}}>⌄</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {f.master&&f.timeIdx!==""&&<div style={{marginTop:6,fontSize:11,color:"#64ffda",fontWeight:600}}>✓ {f.master} · {formatSelectedRange(f.timeIdx, f.durationSlots)} · {formatDurationLabel(f.durationSlots)}</div>}
                 {!!slotSelectionWarning && <div style={{marginTop:6,fontSize:11,color:"#ffb35a",fontWeight:600}}>{slotSelectionWarning}</div>}
               </div>)}
@@ -4080,6 +4247,7 @@ const ContactsView = ({
   contactStatuses,
   contactReasons,
   onSaveContact,
+  onDeleteContact,
   onCreateOrderFromContact,
   onClose,
 }) => {
@@ -4098,6 +4266,8 @@ const ContactsView = ({
   const [selectedId, setSelectedId] = useState(null);
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [contactSaveAttempted, setContactSaveAttempted] = useState(false);
   const statusMap = useMemo(() => makeContactStatusMap(contactStatuses), [contactStatuses]);
   const cityOptions = useMemo(() => Object.keys(cities).map((city) => ({ value: city, label: city })), [cities]);
   const statusOptions = useMemo(() => (contactStatuses || []).map((status) => ({ value: status.name, label: status.name })), [contactStatuses]);
@@ -4234,6 +4404,7 @@ const ContactsView = ({
   const openExisting = (contact) => {
     setSelectedId(contact.id);
     setDraft(null);
+    setContactSaveAttempted(false);
   };
 
   const openNew = () => {
@@ -4243,18 +4414,20 @@ const ContactsView = ({
     }, contactStatuses);
     setDraft(nextDraft);
     setSelectedId("new-contact");
+    setContactSaveAttempted(false);
   };
 
   const closeSelectedContact = () => {
     setDraft(null);
     setSelectedId(null);
+    setContactSaveAttempted(false);
   };
 
   const updateDraft = (field, value) => {
     const base = selectedContact || buildContactDraft(null, contactStatuses);
     const next = { ...base, [field]: value };
     if (field === "status") {
-      if (value !== "Перезвонить") next.callbackDate = "";
+      next.callbackDate = "";
       const allowedReasons = (contactReasons || []).filter((reason) => reason.statusName === value).map((reason) => reason.name);
       if (!allowedReasons.includes(next.reason)) next.reason = "";
     }
@@ -4263,10 +4436,21 @@ const ContactsView = ({
     setDraft(next);
   };
 
+  const saveDisabledReason = useMemo(() => {
+    if (!selectedContact) return "";
+    const phoneDigits = normalizePhoneDigits(selectedContact.phone || "");
+    if (phoneDigits.length < 10) return "Укажи телефон (10 цифр)";
+    if (!selectedContact.city) return "Выбери город";
+    if (duplicatePhoneContact) return "Такой номер уже есть в базе";
+    return "";
+  }, [selectedContact, duplicatePhoneContact]);
+  const saveDisabled = saving || Boolean(saveDisabledReason);
+  const callbackDateError = Boolean(contactSaveAttempted && selectedContact?.status === "Перезвонить" && !selectedContact?.callbackDate);
+
   const saveDraft = async () => {
     if (!selectedContact) return;
-    if (!selectedContact.phone || !selectedContact.city) return;
-    if (selectedContact.status === "Перезвонить" && !selectedContact.callbackDate) return;
+    setContactSaveAttempted(true);
+    if (saveDisabled || callbackDateError) return;
     setSaving(true);
     try {
       await onSaveContact({
@@ -4275,8 +4459,25 @@ const ContactsView = ({
         assignedToName: responsibleEmployees.find((employee) => employee.id === selectedContact.assignedToId)?.name || currentUser?.name || "",
       });
       setDraft(null);
+      setContactSaveAttempted(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const deleteCurrentContact = async () => {
+    if (!selectedContact?.id || selectedContact.id === "new-contact") return;
+    if (typeof onDeleteContact !== "function") return;
+    if (typeof window !== "undefined" && !window.confirm("Удалить этот контакт?")) return;
+    setDeleting(true);
+    try {
+      const ok = await onDeleteContact(selectedContact);
+      if (ok) {
+        setDraft(null);
+        setSelectedId(null);
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -4373,10 +4574,7 @@ const ContactsView = ({
           <PickerField label="Город" value={selectedContact.city} onChange={(value)=>updateDraft("city", value)} options={cityOptions} placeholder="Выбрать город" />
           <PickerField label="Статус" value={selectedContact.status} onChange={(value)=>updateDraft("status", value)} options={statusOptions} placeholder="Выбрать статус" />
           {selectedContact.status === "Перезвонить" && (
-            <div>
-              <div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Дата перезвона</div>
-              <input type="date" value={selectedContact.callbackDate || ""} onChange={(e)=>updateDraft("callbackDate", e.target.value)} style={{width:"100%",height:38,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"0 10px",color:"#e6f1ff",fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",colorScheme:"dark"}} />
-            </div>
+            <ContactDateField label="Дата перезвона" value={selectedContact.callbackDate || ""} onChange={(value)=>updateDraft("callbackDate", value)} error={callbackDateError} placeholder="Выбрать дату" />
           )}
           <PickerField label="Причина" value={selectedContact.reason} onChange={(value)=>updateDraft("reason", value)} options={reasonOptions} placeholder="Выбрать причину" />
           <Fld label="Комментарий" value={selectedContact.comment} onChange={(value)=>updateDraft("comment", value)} multiline placeholder="Что сказал клиент, когда просил перезвонить, есть ли интерес..." />
@@ -4392,9 +4590,13 @@ const ContactsView = ({
             </div>
           </div>
           <div style={{display:"flex",gap:8,marginTop:4}}>
-            <button type="button" disabled={saving || !selectedContact.phone || !selectedContact.city || Boolean(duplicatePhoneContact) || (selectedContact.status === "Перезвонить" && !selectedContact.callbackDate)} onClick={saveDraft} style={{flex:1,height:42,borderRadius:12,border:"none",background:(saving || !selectedContact.phone || !selectedContact.city || duplicatePhoneContact || (selectedContact.status === "Перезвонить" && !selectedContact.callbackDate))?"rgba(255,255,255,0.12)":"linear-gradient(135deg,#65ffdd,#18c5be)",color:(saving || !selectedContact.phone || !selectedContact.city || duplicatePhoneContact || (selectedContact.status === "Перезвонить" && !selectedContact.callbackDate))?"#8f9bb9":"#0a0a23",fontSize:13,fontWeight:800,cursor:(saving || !selectedContact.phone || !selectedContact.city || duplicatePhoneContact || (selectedContact.status === "Перезвонить" && !selectedContact.callbackDate))?"not-allowed":"pointer",fontFamily:"inherit"}}>{saving ? "Сохраняю..." : "Сохранить"}</button>
+            <button type="button" disabled={saveDisabled} onClick={saveDraft} style={{flex:1,height:42,borderRadius:12,border:"none",background:saveDisabled?"rgba(255,255,255,0.12)":"linear-gradient(135deg,#65ffdd,#18c5be)",color:saveDisabled?"#8f9bb9":"#0a0a23",fontSize:13,fontWeight:800,cursor:saveDisabled?"not-allowed":"pointer",fontFamily:"inherit"}}>{saving ? "Сохраняю..." : "Сохранить"}</button>
             <button type="button" onClick={()=>onCreateOrderFromContact(selectedContact)} style={{flex:1,height:42,borderRadius:12,border:"1px solid rgba(129,199,132,0.34)",background:"rgba(129,199,132,0.18)",color:"#b9efbc",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Создать заказ</button>
           </div>
+          {(saveDisabledReason || callbackDateError) && <div style={{fontSize:11,color:"#ffb36b",fontWeight:600,marginTop:-4}}>{saveDisabledReason || "Укажи дату перезвона"}</div>}
+          {selectedContact.id && selectedContact.id !== "new-contact" && typeof onDeleteContact === "function" && (
+            <button type="button" disabled={deleting} onClick={deleteCurrentContact} style={{height:40,borderRadius:12,border:"1px solid rgba(255,82,82,0.35)",background:"rgba(255,82,82,0.14)",color:"#ff9ea1",fontSize:12,fontWeight:800,cursor:deleting?"not-allowed":"pointer",fontFamily:"inherit"}}>{deleting ? "Удаляю..." : "Удалить контакт"}</button>
+          )}
         </div>
       )}
 
@@ -4463,13 +4665,9 @@ const ContactsView = ({
                   </div>
                   <div style={{minWidth:0,paddingLeft:14,paddingRight:10,borderLeft:"1px solid rgba(255,255,255,0.06)",fontSize:13,color:"#b5c5e4",whiteSpace:"normal",lineHeight:1.25,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center"}}>{contact.city || "—"}</div>
                   <div style={{minWidth:0,paddingLeft:14,paddingRight:10,borderLeft:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <CustomSelect
-                      value={contact.status || ""}
-                      onChange={(nextValue) => quickStatusChange(contact, nextValue)}
-                      options={contactStatuses.map((status) => ({ value: status.name, label: status.name }))}
-                      triggerStyle={{minHeight:32,height:32,borderRadius:999,background:meta.pillBg,border:`1px solid ${meta.pillBorder}`,color:meta.pillText,fontSize:11,fontWeight:800,padding:"0 24px 0 12px",textAlign:"center",justifyContent:"center",width:142,boxShadow:"none"}}
-                      menuZIndex={1300}
-                    />
+                    <div style={{width:120,maxWidth:"100%",height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",background:meta.pillBg,border:`1px solid ${meta.pillBorder}`,borderRadius:999,color:meta.pillText,fontSize:10,fontWeight:800,padding:"0 10px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",boxSizing:"border-box"}}>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%"}}>{contact.status || "—"}</span>
+                    </div>
                   </div>
                   <div style={{minWidth:0,paddingLeft:14,paddingRight:10,borderLeft:"1px solid rgba(255,255,255,0.06)",fontSize:13,color:"#b5c5e4",lineHeight:1.3,whiteSpace:"normal",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center"}}>{contact.reason || "—"}</div>
                   <div style={{minWidth:0,paddingLeft:14,paddingRight:10,borderLeft:"1px solid rgba(255,255,255,0.06)",fontSize:13,color:"#b5c5e4",whiteSpace:"nowrap",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center"}}>{contact.callbackDate ? formatDateRu(contact.callbackDate) : "—"}</div>
@@ -4490,7 +4688,12 @@ const ContactsView = ({
         {!isMobileView && <div style={{borderRadius:18,background:"rgba(255,255,255,0.035)",border:"1px solid rgba(255,255,255,0.08)",padding:16,display:"flex",flexDirection:"column",gap:12,position:"sticky",top:16,minHeight:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
             <div style={{fontSize:18,fontWeight:800,color:"#dff7ff"}}>Контакт</div>
-            {selectedContact && <div style={{fontSize:12,color:"#64ffda",fontWeight:700}}>{selectedContact.name || "Без имени"}</div>}
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              {selectedContact && <div style={{fontSize:12,color:"#64ffda",fontWeight:700}}>{selectedContact.name || "Без имени"}</div>}
+              {selectedContact && (
+                <button type="button" onClick={closeSelectedContact} style={{width:30,height:30,borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.04)",color:"#dbe4ff",fontSize:16,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>
+              )}
+            </div>
           </div>
           {!selectedContact ? (
             <div style={{padding:"40px 12px",textAlign:"center",color:"#7f92ba"}}>Выбери строку из таблицы или создай новый контакт.</div>
@@ -4508,10 +4711,7 @@ const ContactsView = ({
               <PickerField label="Город" value={selectedContact.city} onChange={(value)=>updateDraft("city", value)} options={cityOptions} placeholder="Выбрать город" />
               <PickerField label="Статус" value={selectedContact.status} onChange={(value)=>updateDraft("status", value)} options={statusOptions} placeholder="Выбрать статус" />
               {selectedContact.status === "Перезвонить" && (
-                <div>
-                  <div style={{fontSize:10,color:"#8892b0",marginBottom:3,textTransform:"uppercase",letterSpacing:1}}>Дата перезвона</div>
-                  <input type="date" value={selectedContact.callbackDate || ""} onChange={(e)=>updateDraft("callbackDate", e.target.value)} style={{width:"100%",height:38,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"0 10px",color:"#e6f1ff",fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",colorScheme:"dark"}} />
-                </div>
+                <ContactDateField label="Дата перезвона" value={selectedContact.callbackDate || ""} onChange={(value)=>updateDraft("callbackDate", value)} error={callbackDateError} placeholder="Выбрать дату" />
               )}
               <PickerField label="Причина" value={selectedContact.reason} onChange={(value)=>updateDraft("reason", value)} options={reasonOptions} placeholder="Выбрать причину" />
               <Fld label="Комментарий" value={selectedContact.comment} onChange={(value)=>updateDraft("comment", value)} multiline placeholder="Что сказал клиент, когда просил перезвонить, есть ли интерес..." />
@@ -4527,9 +4727,13 @@ const ContactsView = ({
                 </div>
               </div>
               <div style={{display:"flex",gap:8,marginTop:4}}>
-                <button type="button" disabled={saving || !selectedContact.phone || !selectedContact.city || Boolean(duplicatePhoneContact) || (selectedContact.status === "Перезвонить" && !selectedContact.callbackDate)} onClick={saveDraft} style={{flex:1,height:42,borderRadius:12,border:"none",background:(saving || !selectedContact.phone || !selectedContact.city || duplicatePhoneContact || (selectedContact.status === "Перезвонить" && !selectedContact.callbackDate))?"rgba(255,255,255,0.12)":"linear-gradient(135deg,#65ffdd,#18c5be)",color:(saving || !selectedContact.phone || !selectedContact.city || duplicatePhoneContact || (selectedContact.status === "Перезвонить" && !selectedContact.callbackDate))?"#8f9bb9":"#0a0a23",fontSize:13,fontWeight:800,cursor:(saving || !selectedContact.phone || !selectedContact.city || duplicatePhoneContact || (selectedContact.status === "Перезвонить" && !selectedContact.callbackDate))?"not-allowed":"pointer",fontFamily:"inherit"}}>{saving ? "Сохраняю..." : "Сохранить"}</button>
+                <button type="button" disabled={saveDisabled} onClick={saveDraft} style={{flex:1,height:42,borderRadius:12,border:"none",background:saveDisabled?"rgba(255,255,255,0.12)":"linear-gradient(135deg,#65ffdd,#18c5be)",color:saveDisabled?"#8f9bb9":"#0a0a23",fontSize:13,fontWeight:800,cursor:saveDisabled?"not-allowed":"pointer",fontFamily:"inherit"}}>{saving ? "Сохраняю..." : "Сохранить"}</button>
                 <button type="button" onClick={()=>onCreateOrderFromContact(selectedContact)} style={{flex:1,height:42,borderRadius:12,border:"1px solid rgba(129,199,132,0.34)",background:"rgba(129,199,132,0.18)",color:"#b9efbc",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Создать заказ</button>
               </div>
+              {(saveDisabledReason || callbackDateError) && <div style={{fontSize:11,color:"#ffb36b",fontWeight:600}}>{saveDisabledReason || "Укажи дату перезвона"}</div>}
+              {selectedContact.id && selectedContact.id !== "new-contact" && typeof onDeleteContact === "function" && (
+                <button type="button" disabled={deleting} onClick={deleteCurrentContact} style={{height:40,borderRadius:12,border:"1px solid rgba(255,82,82,0.35)",background:"rgba(255,82,82,0.14)",color:"#ff9ea1",fontSize:12,fontWeight:800,cursor:deleting?"not-allowed":"pointer",fontFamily:"inherit"}}>{deleting ? "Удаляю..." : "Удалить контакт"}</button>
+              )}
             </>
           )}
         </div>}
@@ -6352,8 +6556,24 @@ export default function CRM() {
     if (!contact) return;
     setContactToOrderDraft(contact);
     setShowNew(true);
-    setShowContactsView(false);
+    // Keep showContactsView=true so ContactsView stays mounted underneath,
+    // preserving its selectedId, draft, and filter state for when user returns.
   }, []);
+
+  const handleDeleteContact = useCallback(async (contact) => {
+    if (!contact?.id) return false;
+    try {
+      if (isSupabaseConfigured() && authSession?.access_token) {
+        await deleteContact({ contactId: contact.id, session: authSession });
+      }
+      setContacts((prev) => (prev || []).filter((item) => item.id !== contact.id));
+      setRemoteError("");
+      return true;
+    } catch (error) {
+      setRemoteError(error.message || "Не удалось удалить контакт");
+      return false;
+    }
+  }, [authSession]);
 
   const handleOpenOrderFromList = useCallback((orderKey, orderData) => {
     if (!orderKey || !orderData) return;
@@ -6492,10 +6712,18 @@ export default function CRM() {
     };
   }, [authSession, currentUser?.id]);
 
+  const syncSliceRef = useRef({});
   useEffect(() => {
     if (!authSession?.access_token || !isHydrated) return;
     let cancelled = false;
     let timerId = null;
+    const applyIfChanged = (key, next, setter) => {
+      let serialized;
+      try { serialized = JSON.stringify(next); } catch { serialized = null; }
+      if (serialized != null && syncSliceRef.current[key] === serialized) return;
+      syncSliceRef.current[key] = serialized;
+      setter(next);
+    };
     const syncState = async () => {
       if (
         popup ||
@@ -6512,19 +6740,24 @@ export default function CRM() {
       try {
         const snapshot = await loadCrmState(defaultSnapshot, authSession);
         if (cancelled || !snapshot) return;
-        setCities(snapshot.cities);
-        setEmployees(snapshot.employees);
-        setOrders(snapshot.orders);
-        setOrderHistory(snapshot.orderHistory);
-        setDayOffs(snapshot.dayOffs);
-        setBusySlots(snapshot.busySlots || {});
-        setSlotLocks(pruneExpiredSlotLocks(snapshot.slotLocks || {}));
-        setSources(snapshot.sources);
-        setServices(snapshot.services || INIT_SERVICES);
-        setStatuses(snapshot.statuses || INIT_STATUSES);
+        applyIfChanged("cities", snapshot.cities, setCities);
+        applyIfChanged("employees", snapshot.employees, setEmployees);
+        applyIfChanged("orders", snapshot.orders, setOrders);
+        applyIfChanged("orderHistory", snapshot.orderHistory, setOrderHistory);
+        applyIfChanged("dayOffs", snapshot.dayOffs, setDayOffs);
+        applyIfChanged("busySlots", snapshot.busySlots || {}, setBusySlots);
+        applyIfChanged("slotLocks", pruneExpiredSlotLocks(snapshot.slotLocks || {}), setSlotLocks);
+        applyIfChanged("sources", snapshot.sources, setSources);
+        applyIfChanged("services", snapshot.services || INIT_SERVICES, setServices);
+        applyIfChanged("statuses", snapshot.statuses || INIT_STATUSES, setStatuses);
         setCurrentUser((prev) => {
           if (!prev) return snapshot.currentUser;
-          return snapshot.currentUser ? { ...prev, ...snapshot.currentUser } : prev;
+          if (!snapshot.currentUser) return prev;
+          const merged = { ...prev, ...snapshot.currentUser };
+          try {
+            if (JSON.stringify(merged) === JSON.stringify(prev)) return prev;
+          } catch {}
+          return merged;
         });
       } catch (error) {
         if (!cancelled) console.error("Background CRM sync failed:", error);
@@ -6532,7 +6765,7 @@ export default function CRM() {
     };
 
     syncState();
-    timerId = window.setInterval(syncState, 4000);
+    timerId = window.setInterval(syncState, 8000);
     const onFocus = () => { syncState(); };
     const onVisibility = () => {
       if (document.visibilityState === "visible") syncState();
@@ -6795,7 +7028,7 @@ export default function CRM() {
       <div style={isMobile && isAnySubViewOpen ? {height:"calc(100vh - 74px)",overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain"} : undefined}>
       {showEmployeeList ? <EmployeesPage employees={employees} groupedEmployees={groupedEmployees} visibleCities={visibleCities} currentUser={currentUser} onOpenEmployee={openEmployeeCard} onAddEmployee={()=>{openEmployeeCard({ type:"", city:"", color:MCOLORS[0] }, { fromList: true });setShowAddEmployee(true);}} onProvisionAccess={setAccessEmployee} onEditAccess={setEditAccessEmployee} onOpenPermissions={setPermissionsEmployee} onDeleteEmployee={setDeleteEmployeeDraft} onClose={openOrdersView} /> :
       showOrdersExplorerView ? <OrdersExplorerView orders={orders} deletedOrders={deletedOrders} cities={cities} employees={employees} currentUser={currentUser} services={services} statuses={statuses} sources={sources} onOpenOrder={handleOpenOrderFromList} onOpenNew={()=>setShowNew(true)} onClose={openOrdersView} /> :
-      showContactsView ? <ContactsView cities={cities} employees={employees} currentUser={currentUser} contacts={contacts} contactStatuses={contactStatuses} contactReasons={contactReasons} onSaveContact={handleSaveContact} onCreateOrderFromContact={handleCreateOrderFromContact} onClose={openOrdersView} /> :
+      showContactsView ? <ContactsView cities={cities} employees={employees} currentUser={currentUser} contacts={contacts} contactStatuses={contactStatuses} contactReasons={contactReasons} onSaveContact={handleSaveContact} onDeleteContact={handleDeleteContact} onCreateOrderFromContact={handleCreateOrderFromContact} onClose={openOrdersView} /> :
       showDataView ? <DataAdminView cities={cities} sources={sources} statuses={statuses} contactStatuses={contactStatuses} contactReasons={contactReasons} currentUser={currentUser} onAddCity={async (n,c,coords)=>{
         if (isSupabaseConfigured() && authSession?.access_token) {
           try {

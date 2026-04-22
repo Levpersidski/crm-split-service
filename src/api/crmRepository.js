@@ -1244,6 +1244,21 @@ export const upsertContact = async ({ contact, cities, currentUser, contactStatu
   }
 };
 
+export const deleteContact = async ({ contactId, session }) => {
+  if (!contactId) throw new Error("Нет идентификатора контакта");
+  const token = session?.access_token;
+  if (!token) throw new Error("Нет активной сессии для удаления контакта");
+  try {
+    await restDelete("contacts", { token, filters: { id: `eq.${contactId}` } });
+  } catch (error) {
+    const message = `${error?.message || ""}`;
+    if (message.includes("contacts")) {
+      throw new Error("Для контактов нужно выполнить SQL-файл supabase_contacts.sql в Supabase SQL Editor.");
+    }
+    throw error;
+  }
+};
+
 export const deleteStatus = async ({ name, currentUserRole, session }) => {
   if (currentUserRole !== "admin") throw new Error("Удаление статусов доступно только админу");
   const token = session?.access_token;
