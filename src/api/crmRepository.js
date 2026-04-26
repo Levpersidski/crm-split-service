@@ -473,14 +473,160 @@ export const createCrmSnapshot = (state) => ({
   state,
 });
 
+const fetchOrdersWithFallback = async (token) => {
+  const select = (cols) => restSelect("orders", {
+    token,
+    select: cols,
+    filters: { order: "order_date.asc,time_slot.asc" },
+  });
+  const FULL = "id,order_number,city_id,technician_id,created_by,source_id,direction_id,subcategory_id,order_date,time_slot,duration_slots,price,final_price,district,client_name,client_phone,address,lat,lng,comment,status,technician_confirmed_at,technician_confirmed_by,returned_to_office_at,returned_to_office_by,return_to_office_comment,office_attention_required,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),direction:direction_id(name),subcategory:subcategory_id(name),creator:created_by(name),technician_ack:technician_confirmed_by(name),return_author:returned_to_office_by(name)";
+  const NO_TECH_ACK = "id,order_number,city_id,technician_id,created_by,source_id,direction_id,subcategory_id,order_date,time_slot,duration_slots,price,final_price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),direction:direction_id(name),subcategory:subcategory_id(name),creator:created_by(name)";
+  const LEGACY_HOURLY = "id,order_number,city_id,technician_id,created_by,source_id,direction_id,subcategory_id,order_date,time_slot,price,final_price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),direction:direction_id(name),subcategory:subcategory_id(name),creator:created_by(name)";
+  const LEGACY_HOURLY_NO_NUMBER = "id,city_id,technician_id,created_by,source_id,order_date,time_slot,price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),creator:created_by(name)";
+  const NO_NUMBER = "id,city_id,technician_id,created_by,source_id,order_date,time_slot,duration_slots,price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),creator:created_by(name)";
+
+  try {
+    return { ordersRaw: await select(FULL), legacyHourly: false };
+  } catch (error) {
+    const msg = `${error?.message || ""}`;
+    if (msg.includes("technician_confirmed_at") || msg.includes("returned_to_office_at") || msg.includes("office_attention_required") || msg.includes("return_to_office_comment")) {
+      try {
+        return { ordersRaw: await select(NO_TECH_ACK), legacyHourly: false };
+      } catch (e2) {
+        const m2 = `${e2?.message || ""}`;
+        if (m2.includes("duration_slots")) {
+          try {
+            return { ordersRaw: await select(LEGACY_HOURLY), legacyHourly: true };
+          } catch (e3) {
+            const m3 = `${e3?.message || ""}`;
+            if (m3.includes("final_price") || m3.includes("order_number")) {
+              return { ordersRaw: await select(LEGACY_HOURLY_NO_NUMBER), legacyHourly: true };
+            }
+            throw e3;
+          }
+        }
+        if (m2.includes("final_price") || m2.includes("order_number")) {
+          return { ordersRaw: await select(NO_NUMBER), legacyHourly: false };
+        }
+        throw e2;
+      }
+    }
+    if (msg.includes("duration_slots")) {
+      try {
+        return { ordersRaw: await select(LEGACY_HOURLY), legacyHourly: true };
+      } catch (e2) {
+        const m2 = `${e2?.message || ""}`;
+        if (m2.includes("final_price") || m2.includes("order_number")) {
+          return { ordersRaw: await select(LEGACY_HOURLY_NO_NUMBER), legacyHourly: true };
+        }
+        throw e2;
+      }
+    }
+    if (msg.includes("final_price") || msg.includes("order_number")) {
+      return { ordersRaw: await select(NO_NUMBER), legacyHourly: false };
+    }
+    throw error;
+  }
+};
+
+const fetchContactsWithFallback = async (token) => {
+  const select = (cols) => restSelect("contacts", {
+    token,
+    select: cols,
+    filters: { order: "created_at.desc" },
+  });
+  const FULL = "id,name,phone,city_id,contact_status_id,contact_reason_id,comment,callback_date,created_at,updated_at,created_by,last_edited_by,assigned_employee_id,last_call_at,converted_order_id,city:city_id(name),status:contact_status_id(name),reason:contact_reason_id(name),creator:created_by(name),editor:last_edited_by(name),assigned:assigned_employee_id(name)";
+  const NO_NAME = "id,phone,city_id,contact_status_id,contact_reason_id,comment,callback_date,created_at,updated_at,created_by,last_edited_by,assigned_employee_id,last_call_at,converted_order_id,city:city_id(name),status:contact_status_id(name),reason:contact_reason_id(name),creator:created_by(name),editor:last_edited_by(name),assigned:assigned_employee_id(name)";
+  try {
+    return await select(FULL);
+  } catch (error) {
+    if (!`${error?.message || ""}`.includes("name")) throw error;
+    return await select(NO_NAME);
+  }
+};
+
 export const loadCrmState = async (defaults, session) => {
   const stored = readLocalSnapshot();
   const storedState = stored?.state || {};
   if (isSupabaseConfigured() && session?.access_token) {
     const token = session.access_token;
-    const cities = await restSelect("cities", { token, select: "id,name,color,lat,lng", filters: { order: "created_at.asc" } });
-    const employeesRaw = await restSelect("employees", { token, select: "id,auth_user_id,auth_email,name,employee_type,color,phone,can_view_technician_cards,last_seen,city:city_id(name)", filters: { order: "created_at.asc" } });
+    const softFetch = (label, promise, fallback) => promise.catch((error) => {
+      console.warn(`${label} load fallback:`, error);
+      return fallback;
+    });
+
+    const [
+      cities,
+      employeesRaw,
+      employeeScopesRaw,
+      sources,
+      ordersResult,
+      dayOffsRaw,
+      orderItemsRaw,
+      historyRaw,
+      servicesRaw,
+      statusesRaw,
+      contactStatusesRaw,
+      contactReasonsRaw,
+      contactsRaw,
+      busySlotsRaw,
+      slotLocksRaw,
+    ] = await Promise.all([
+      restSelect("cities", { token, select: "id,name,color,lat,lng", filters: { order: "created_at.asc" } }),
+      restSelect("employees", { token, select: "id,auth_user_id,auth_email,name,employee_type,color,phone,can_view_technician_cards,last_seen,city:city_id(name)", filters: { order: "created_at.asc" } }),
+      softFetch("Employee scopes", restSelect("employee_service_scopes", {
+        token,
+        select: "employee_id,direction_id,subcategory_id,direction:direction_id(name),subcategory:subcategory_id(name)",
+      }), []),
+      restSelect("sources", { token, select: "id,name", filters: { order: "name.asc" } }),
+      fetchOrdersWithFallback(token),
+      restSelect("day_offs", {
+        token,
+        select: "technician_id,off_date,technician:technician_id(name,city:city_id(name))",
+      }),
+      softFetch("Order items", restSelect("order_service_items", {
+        token,
+        select: "id,order_id,service_id,quantity,unit_price,service:service_id(name)",
+      }), []),
+      restSelect("order_history", {
+        token,
+        select: "id,order_id,action,field_name,old_value,new_value,meta,created_at,actor:actor_employee_id(name)",
+        filters: { order: "created_at.desc" },
+      }),
+      softFetch("Service catalog", restSelect("service_catalog", {
+        token,
+        select: "id,parent_id,node_type,name,price,sort_order",
+        filters: { order: "sort_order.asc,created_at.asc" },
+      }), null),
+      softFetch("Status catalog", restSelect("status_catalog", {
+        token,
+        select: "id,name,short_label,tone_key,sort_order",
+        filters: { order: "sort_order.asc,created_at.asc" },
+      }), null),
+      softFetch("Contact statuses", restSelect("contact_statuses", {
+        token,
+        select: "id,name,tone_key,sort_order,system_key,is_default",
+        filters: { order: "sort_order.asc,created_at.asc" },
+      }), null),
+      softFetch("Contact reasons", restSelect("contact_reasons", {
+        token,
+        select: "id,name,contact_status_id,sort_order,status:contact_status_id(name)",
+        filters: { order: "sort_order.asc,created_at.asc" },
+      }), null),
+      softFetch("Contacts", fetchContactsWithFallback(token), null),
+      restSelect("busy_slots", {
+        token,
+        select: "technician_id,busy_date,time_slot,technician:technician_id(name,city:city_id(name))",
+      }),
+      softFetch("Slot locks", restSelect("slot_locks", {
+        token,
+        select: "id,technician_id,order_date,time_slot,employee_id,employee_name,expires_at,technician:technician_id(name,city:city_id(name))",
+      }), []),
+    ]);
+
+    const { ordersRaw, legacyHourly } = ordersResult;
     const currentUserRow = employeesRaw.find((row) => row.auth_user_id === session.user?.id) || null;
+
     let privateRows = [];
     if (currentUserRow?.employee_type === "admin") {
       try {
@@ -503,183 +649,16 @@ export const loadCrmState = async (defaults, session) => {
         residenceLng: row.residence_lng ?? null,
       },
     }), {});
-    let employeeScopesMap = {};
-    try {
-      const employeeScopesRaw = await restSelect("employee_service_scopes", {
-        token,
-        select: "employee_id,direction_id,subcategory_id,direction:direction_id(name),subcategory:subcategory_id(name)",
-      });
-      employeeScopesMap = normalizeEmployeeScopes(employeeScopesRaw || []);
-    } catch (error) {
-      console.warn("Employee scopes load fallback:", error);
-    }
-    const sources = await restSelect("sources", { token, select: "id,name", filters: { order: "name.asc" } });
-    let legacyHourly = false;
-    let ordersRaw;
-    try {
-      ordersRaw = await restSelect("orders", {
-        token,
-        select: "id,order_number,city_id,technician_id,created_by,source_id,direction_id,subcategory_id,order_date,time_slot,duration_slots,price,final_price,district,client_name,client_phone,address,lat,lng,comment,status,technician_confirmed_at,technician_confirmed_by,returned_to_office_at,returned_to_office_by,return_to_office_comment,office_attention_required,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),direction:direction_id(name),subcategory:subcategory_id(name),creator:created_by(name),technician_ack:technician_confirmed_by(name),return_author:returned_to_office_by(name)",
-        filters: { order: "order_date.asc,time_slot.asc" },
-      });
-    } catch (error) {
-      const message = `${error?.message || ""}`;
-      if (message.includes("technician_confirmed_at") || message.includes("returned_to_office_at") || message.includes("office_attention_required") || message.includes("return_to_office_comment")) {
-        try {
-          ordersRaw = await restSelect("orders", {
-            token,
-            select: "id,order_number,city_id,technician_id,created_by,source_id,direction_id,subcategory_id,order_date,time_slot,duration_slots,price,final_price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),direction:direction_id(name),subcategory:subcategory_id(name),creator:created_by(name)",
-            filters: { order: "order_date.asc,time_slot.asc" },
-          });
-        } catch (fallbackError) {
-          const fallbackMessage = `${fallbackError?.message || ""}`;
-          if (fallbackMessage.includes("duration_slots")) {
-            legacyHourly = true;
-            try {
-              ordersRaw = await restSelect("orders", {
-                token,
-                select: "id,order_number,city_id,technician_id,created_by,source_id,direction_id,subcategory_id,order_date,time_slot,price,final_price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),direction:direction_id(name),subcategory:subcategory_id(name),creator:created_by(name)",
-                filters: { order: "order_date.asc,time_slot.asc" },
-              });
-            } catch (legacyError) {
-              const legacyMessage = `${legacyError?.message || ""}`;
-              if (legacyMessage.includes("final_price") || legacyMessage.includes("order_number")) {
-                ordersRaw = await restSelect("orders", {
-                  token,
-                  select: "id,city_id,technician_id,created_by,source_id,order_date,time_slot,price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),creator:created_by(name)",
-                  filters: { order: "order_date.asc,time_slot.asc" },
-                });
-              } else {
-                throw legacyError;
-              }
-            }
-          } else if (fallbackMessage.includes("final_price") || fallbackMessage.includes("order_number")) {
-            ordersRaw = await restSelect("orders", {
-              token,
-              select: "id,city_id,technician_id,created_by,source_id,order_date,time_slot,duration_slots,price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),creator:created_by(name)",
-              filters: { order: "order_date.asc,time_slot.asc" },
-            });
-          } else {
-            throw fallbackError;
-          }
-        }
-      } else if (message.includes("duration_slots")) {
-        legacyHourly = true;
-        try {
-          ordersRaw = await restSelect("orders", {
-            token,
-            select: "id,order_number,city_id,technician_id,created_by,source_id,direction_id,subcategory_id,order_date,time_slot,price,final_price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),direction:direction_id(name),subcategory:subcategory_id(name),creator:created_by(name)",
-            filters: { order: "order_date.asc,time_slot.asc" },
-          });
-        } catch (legacyError) {
-          const legacyMessage = `${legacyError?.message || ""}`;
-          if (legacyMessage.includes("final_price") || legacyMessage.includes("order_number")) {
-            ordersRaw = await restSelect("orders", {
-              token,
-              select: "id,city_id,technician_id,created_by,source_id,order_date,time_slot,price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),creator:created_by(name)",
-              filters: { order: "order_date.asc,time_slot.asc" },
-            });
-          } else {
-            throw legacyError;
-          }
-        }
-      } else if (message.includes("final_price") || message.includes("order_number")) {
-        ordersRaw = await restSelect("orders", {
-          token,
-          select: "id,city_id,technician_id,created_by,source_id,order_date,time_slot,duration_slots,price,district,client_name,client_phone,address,lat,lng,comment,status,work_order,work_done,created_at,city:city_id(name),technician:technician_id(name),source:source_id(name),creator:created_by(name)",
-          filters: { order: "order_date.asc,time_slot.asc" },
-        });
-      } else {
-        throw error;
-      }
-    }
-    const dayOffsRaw = await restSelect("day_offs", {
-      token,
-      select: "technician_id,off_date,technician:technician_id(name,city:city_id(name))",
-    });
-    let orderItemsMap = {};
-    try {
-      const orderItemsRaw = await restSelect("order_service_items", {
-        token,
-        select: "id,order_id,service_id,quantity,unit_price,service:service_id(name)",
-      });
-      orderItemsMap = normalizeOrderItems(orderItemsRaw || []);
-    } catch (error) {
-      console.warn("Order items load fallback:", error);
-    }
+
+    const employeeScopesMap = normalizeEmployeeScopes(employeeScopesRaw || []);
+    const orderItemsMap = normalizeOrderItems(orderItemsRaw || []);
     const orders = normalizeOrders(ordersRaw || [], { legacyHourly, orderItemsMap });
-    const historyRaw = await restSelect("order_history", {
-      token,
-      select: "id,order_id,action,field_name,old_value,new_value,meta,created_at,actor:actor_employee_id(name)",
-      filters: { order: "created_at.desc" },
-    });
     const ordersWithHistoryMeta = applyOrderHistoryMetadata(orders, historyRaw || []);
-    let services = stored?.state?.services || defaults.services;
-    let statuses = stored?.state?.statuses || defaults.statuses || DEFAULT_STATUSES;
-    let contactStatuses = stored?.state?.contactStatuses || defaults.contactStatuses || DEFAULT_CONTACT_STATUSES;
-    let contactReasons = stored?.state?.contactReasons || defaults.contactReasons || DEFAULT_CONTACT_REASONS;
-    let contacts = stored?.state?.contacts || defaults.contacts || [];
-    try {
-      const servicesRaw = await restSelect("service_catalog", {
-        token,
-        select: "id,parent_id,node_type,name,price,sort_order",
-        filters: { order: "sort_order.asc,created_at.asc" },
-      });
-      services = normalizeServices(servicesRaw || []);
-    } catch (error) {
-      console.warn("Service catalog load fallback:", error);
-    }
-    try {
-      const statusesRaw = await restSelect("status_catalog", {
-        token,
-        select: "id,name,short_label,tone_key,sort_order",
-        filters: { order: "sort_order.asc,created_at.asc" },
-      });
-      statuses = normalizeStatuses(statusesRaw || []);
-    } catch (error) {
-      console.warn("Status catalog load fallback:", error);
-    }
-    try {
-      const contactStatusesRaw = await restSelect("contact_statuses", {
-        token,
-        select: "id,name,tone_key,sort_order,system_key,is_default",
-        filters: { order: "sort_order.asc,created_at.asc" },
-      });
-      contactStatuses = normalizeContactStatuses(contactStatusesRaw || []);
-    } catch (error) {
-      console.warn("Contact statuses load fallback:", error);
-    }
-    try {
-      const contactReasonsRaw = await restSelect("contact_reasons", {
-        token,
-        select: "id,name,contact_status_id,sort_order,status:contact_status_id(name)",
-        filters: { order: "sort_order.asc,created_at.asc" },
-      });
-      contactReasons = normalizeContactReasons(contactReasonsRaw || []);
-    } catch (error) {
-      console.warn("Contact reasons load fallback:", error);
-    }
-    try {
-      let contactsRaw;
-      try {
-        contactsRaw = await restSelect("contacts", {
-          token,
-          select: "id,name,phone,city_id,contact_status_id,contact_reason_id,comment,callback_date,created_at,updated_at,created_by,last_edited_by,assigned_employee_id,last_call_at,converted_order_id,city:city_id(name),status:contact_status_id(name),reason:contact_reason_id(name),creator:created_by(name),editor:last_edited_by(name),assigned:assigned_employee_id(name)",
-          filters: { order: "created_at.desc" },
-        });
-      } catch (error) {
-        const message = `${error?.message || ""}`;
-        if (!message.includes("name")) throw error;
-        contactsRaw = await restSelect("contacts", {
-          token,
-          select: "id,phone,city_id,contact_status_id,contact_reason_id,comment,callback_date,created_at,updated_at,created_by,last_edited_by,assigned_employee_id,last_call_at,converted_order_id,city:city_id(name),status:contact_status_id(name),reason:contact_reason_id(name),creator:created_by(name),editor:last_edited_by(name),assigned:assigned_employee_id(name)",
-          filters: { order: "created_at.desc" },
-        });
-      }
-      contacts = normalizeContacts(contactsRaw || []);
-    } catch (error) {
-      console.warn("Contacts load fallback:", error);
-    }
+    const services = servicesRaw ? normalizeServices(servicesRaw) : (stored?.state?.services || defaults.services);
+    const statuses = statusesRaw ? normalizeStatuses(statusesRaw) : (stored?.state?.statuses || defaults.statuses || DEFAULT_STATUSES);
+    const contactStatuses = contactStatusesRaw ? normalizeContactStatuses(contactStatusesRaw) : (stored?.state?.contactStatuses || defaults.contactStatuses || DEFAULT_CONTACT_STATUSES);
+    const contactReasons = contactReasonsRaw ? normalizeContactReasons(contactReasonsRaw) : (stored?.state?.contactReasons || defaults.contactReasons || DEFAULT_CONTACT_REASONS);
+    const contacts = contactsRaw ? normalizeContacts(contactsRaw) : (stored?.state?.contacts || defaults.contacts || []);
 
     const normalizedCities = normalizeCities(cities || []);
     const preferredActiveCity = storedState.activeCity && normalizedCities[storedState.activeCity]
@@ -704,17 +683,8 @@ export const loadCrmState = async (defaults, session) => {
       orders: ordersWithHistoryMeta,
       orderHistory: normalizeHistory(historyRaw || [], ordersWithHistoryMeta),
       dayOffs: normalizeDayOffs(dayOffsRaw || []),
-      busySlots: normalizeBusySlots(await restSelect("busy_slots", {
-        token,
-        select: "technician_id,busy_date,time_slot,technician:technician_id(name,city:city_id(name))",
-      }) || [], { legacyHourly }),
-      slotLocks: normalizeSlotLocks(await restSelect("slot_locks", {
-        token,
-        select: "id,technician_id,order_date,time_slot,employee_id,employee_name,expires_at,technician:technician_id(name,city:city_id(name))",
-      }).catch((error) => {
-        console.warn("Slot locks load fallback:", error);
-        return [];
-      })),
+      busySlots: normalizeBusySlots(busySlotsRaw || [], { legacyHourly }),
+      slotLocks: normalizeSlotLocks(slotLocksRaw || []),
       sources: (sources || []).map((row) => row.name),
       services,
       statuses,
@@ -1481,21 +1451,31 @@ export const toggleBusySlotRemote = async ({ activeCity, masterName, dateStr, ti
       time_slot: `eq.${Number(timeIdx)}`,
     },
   });
-  if (existing?.length) {
-    await restDelete("busy_slots", {
-      token,
-      filters: {
-        technician_id: `eq.${technician.id}`,
-        busy_date: `eq.${dateStr}`,
-        time_slot: `eq.${Number(timeIdx)}`,
-      },
-    });
-  } else {
-    await restInsert("busy_slots", {
-      technician_id: technician.id,
-      busy_date: dateStr,
-      time_slot: Number(timeIdx),
-    }, { token });
+  const isHarmlessRaceError = (err) => {
+    const message = String(err?.message || err || "").toLowerCase();
+    return message.includes("duplicate key")
+      || message.includes("busy_slots_pkey")
+      || message.includes("23505");
+  };
+  try {
+    if (existing?.length) {
+      await restDelete("busy_slots", {
+        token,
+        filters: {
+          technician_id: `eq.${technician.id}`,
+          busy_date: `eq.${dateStr}`,
+          time_slot: `eq.${Number(timeIdx)}`,
+        },
+      });
+    } else {
+      await restInsert("busy_slots", {
+        technician_id: technician.id,
+        busy_date: dateStr,
+        time_slot: Number(timeIdx),
+      }, { token });
+    }
+  } catch (err) {
+    if (!isHarmlessRaceError(err)) throw err;
   }
 };
 

@@ -1,7 +1,7 @@
 const SESSION_KEY = "crm-v2-supabase-session";
-const AUTH_REFRESH_BUFFER_SECONDS = 30;
+const AUTH_REFRESH_BUFFER_SECONDS = 300;
 const NETWORK_RETRY_DELAY_MS = 350;
-const FETCH_TIMEOUT_MS = 8000;
+const FETCH_TIMEOUT_MS = 15000;
 
 export const getSupabaseConfig = () => ({
   url: import.meta.env?.VITE_SUPABASE_URL || "",
@@ -68,6 +68,14 @@ const getAuthErrorMessage = (data, fallback) => (
   fallback
 );
 
+const isInvalidRefreshTokenMessage = (message = "") => {
+  const normalized = String(message || "").toLowerCase();
+  return normalized.includes("invalid refresh token")
+    || normalized.includes("refresh token not found")
+    || normalized.includes("refresh_token_not_found")
+    || normalized.includes("invalid grant");
+};
+
 const isRetriableNetworkError = (error) => {
   const message = `${error?.message || error || ""}`.toLowerCase();
   return message.includes("load failed")
@@ -97,7 +105,7 @@ const fetchWithTimeout = async (input, init = {}) => {
   }
 };
 
-const fetchWithRetry = async (input, init, attempts = 2) => {
+const fetchWithRetry = async (input, init, attempts = 3) => {
   let lastError = null;
   for (let index = 0; index < attempts; index += 1) {
     try {
@@ -128,7 +136,8 @@ export const refreshSession = async (sessionOverride = null) => {
   const data = await parseResponseBody(res);
   if (!res.ok) {
     storeSession(null);
-    throw new Error(getAuthErrorMessage(data, "Сессия истекла. Войди снова."));
+    const message = getAuthErrorMessage(data, "Сессия истекла. Войди снова.");
+    throw new Error(isInvalidRefreshTokenMessage(message) ? "Сессия истекла. Войди снова." : message);
   }
   storeSession(data);
   return data;

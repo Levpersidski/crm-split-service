@@ -3,11 +3,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 const BASE_TRIGGER_STYLE = {
   width: "100%",
   minHeight: 38,
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.1)",
+  background: "var(--field-bg, rgba(255,255,255,0.06))",
+  border: "1px solid var(--border-subtle, rgba(255,255,255,0.1))",
   borderRadius: 8,
   padding: "9px 36px 9px 12px",
-  color: "#e6f1ff",
+  color: "var(--text-primary, #e6f1ff)",
   fontSize: 12,
   fontFamily: "inherit",
   lineHeight: 1.2,
@@ -24,10 +24,10 @@ const BASE_MENU_STYLE = {
   top: "calc(100% + 6px)",
   left: 0,
   right: 0,
-  background: "#1e1e38",
-  border: "1px solid rgba(100,255,218,0.2)",
+  background: "var(--bg-elevated, #1e1e38)",
+  border: "1px solid var(--accent-border, rgba(100,255,218,0.2))",
   borderRadius: 8,
-  boxShadow: "0 8px 30px rgba(0,0,0,0.5)",
+  boxShadow: "var(--shadow-soft, 0 8px 30px rgba(0,0,0,0.5))",
   maxHeight: 200,
   overflowY: "auto",
   zIndex: 50,
@@ -41,7 +41,7 @@ const BASE_MENU_STYLE = {
 const BASE_OPTION_STYLE = {
   width: "100%",
   padding: "9px 12px",
-  color: "#e6f1ff",
+  color: "var(--text-primary, #e6f1ff)",
   cursor: "pointer",
   border: "none",
   background: "transparent",
@@ -169,7 +169,7 @@ export default function CustomSelect({
         aria-expanded={open}
         style={{
           ...BASE_TRIGGER_STYLE,
-          ...(selectedOption ? null : { color: "#5a6a8a" }),
+          ...(selectedOption ? null : { color: "var(--text-muted, #5a6a8a)" }),
           ...(disabled ? { cursor: "not-allowed", opacity: 0.72 } : { cursor: "pointer" }),
           ...(triggerStyle || {}),
         }}
@@ -177,7 +177,7 @@ export default function CustomSelect({
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", width: "100%" }}>
           {selectedOption?.label || placeholder}
         </span>
-        <span style={{ position: "absolute", right: 12, top: "50%", transform: `translateY(-50%) ${open ? "rotate(180deg)" : "rotate(0deg)"}`, color: "#5a6a8a", transition: "transform 0.16s ease" }}>▾</span>
+        <span style={{ position: "absolute", right: 12, top: "50%", transform: `translateY(-50%) ${open ? "rotate(180deg)" : "rotate(0deg)"}`, color: "var(--text-muted, #5a6a8a)", transition: "transform 0.16s ease" }}>▾</span>
       </button>
 
       {renderMenu && (
@@ -205,8 +205,8 @@ export default function CustomSelect({
                   onClick={() => commitValue(option.value)}
                   style={{
                     ...BASE_OPTION_STYLE,
-                    ...(isActive ? { background: "rgba(100,255,218,0.08)" } : null),
-                    ...(isSelected ? { color: "#64ffda", fontWeight: 600 } : null),
+                    ...(isActive ? { background: "var(--accent-tint, rgba(100,255,218,0.08))" } : null),
+                    ...(isSelected ? { color: "var(--accent, #64ffda)", fontWeight: 600 } : null),
                     ...(optionStyle || {}),
                   }}
                 >
